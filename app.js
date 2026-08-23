@@ -1385,4 +1385,4 @@ $("btShort").addEventListener("click", () => runBacktest("short"));
 
 // 启动
 fetchAll();
-refreshTimer = setInterval(fetchAll, 30000);
+refreshTimer = setInterval(fetchAll, 5000);
