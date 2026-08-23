@@ -1027,15 +1027,25 @@ function saveSim(list) {
   try { localStorage.setItem(SIM_KEY, JSON.stringify(list)); } catch (e) {}
 }
 
-// 设置策略方向(回测后调用, 按钮始终可见)
+// 设置策略方向
 function showSimButton(dir) {
   simDirection = dir;
+  updateSimDirButtons();
 }
+function updateSimDirButtons() {
+  const bl = $("simDirLong"), bs = $("simDirShort");
+  if (!bl || !bs) return;
+  bl.style.opacity = simDirection === "long" ? 1 : 0.4;
+  bs.style.opacity = simDirection === "short" ? 1 : 0.4;
+}
+$("simDirLong").addEventListener("click", () => { simDirection = "long"; updateSimDirButtons(); });
+$("simDirShort").addEventListener("click", () => { simDirection = "short"; updateSimDirButtons(); });
 
-// 点击"开始模拟交易" → 显示参数表单
+// 点击"策略开仓" → 显示参数表单
 $("simStartBtn").addEventListener("click", () => {
   $("simStartBtn").classList.add("hidden");
   $("simForm").classList.remove("hidden");
+  updateSimDirButtons();
   updateSimPreview();
 });
 
@@ -1065,10 +1075,11 @@ function updateSimPreview() {
     爆仓价: <b style="color:#ff4444">${fmtP(liq)}</b> (亏光保证金$${m})`;
 }
 
-// 确认开仓 → 创建等待信号的模拟交易(策略仓)
+// 确认开仓 → 立即以当前价格开仓(策略仓, 不再等信号)
 $("simConfirm").addEventListener("click", () => {
   const m = +$("simMargin").value || 100;
   const lev = Math.min(125, Math.max(1, +$("simLev").value || 10));
+  if (price <= 0) return;
   const list = loadSim();
   // 防重复: 同币种+同方向+策略仓只能有一个未完结的
   const dup = list.some(t => t.coin === coin && t.direction === simDirection &&
@@ -1077,6 +1088,8 @@ $("simConfirm").addEventListener("click", () => {
     alert(`已有 ${META[coin].sym} 的${simDirection === "long" ? "做多" : "做空"}策略仓在运行`);
     return;
   }
+  const isLong = simDirection === "long";
+  const imr = 1 / lev, mmr = 0.005;
   list.push({
     id: Date.now(),
     tradeType: "strategy",
@@ -1085,9 +1098,12 @@ $("simConfirm").addEventListener("click", () => {
     sym: META[coin].sym,
     margin: m,
     leverage: lev,
-    status: "waiting",
-    entryPrice: null, entryTime: null,
-    tpPrice: null, slPrice: null, liqPrice: null,
+    scoreAtOpen: getCurrentSignalScore(simDirection),
+    status: "open",              // 立即开仓
+    entryPrice: price, entryTime: Date.now(),
+    tpPrice: isLong ? price * 1.02 : price * 0.98,
+    slPrice: isLong ? price * 0.99 : price * 1.01,
+    liqPrice: isLong ? price * (1 - imr + mmr) : price * (1 + imr - mmr),
     exitPrice: null, exitTime: null,
     pnl: null, roi: null,
   });
