@@ -344,6 +344,158 @@ function calcRatioStats(ratios) {
   return { avg, median, mode, modeCount };
 }
 
+// ==================== 成交透视: 量价分布+交易者画像+共识 ====================
+$("xrayBtn").addEventListener("click", () => {
+  $("xrayOverlay").classList.remove("hidden");
+  $("xraySym").textContent = META[coin].sym + "/USDT";
+  runXray();
+});
+$("xrayClose").addEventListener("click", () => $("xrayOverlay").classList.add("hidden"));
+$("xrayOverlay").addEventListener("click", (e) => {
+  if (e.target === $("xrayOverlay")) $("xrayOverlay").classList.add("hidden");
+});
+
+function runXray() {
+  if (!trades.length) return;
+  // 统一格式
+  const isBuy = (t) => dataSource === "okx" ? t.buy : t.m === false;
+  const getP = (t) => +t.p;
+  const getQ = (t) => dataSource === "okx" ? t.q : +t.q;
+
+  // ========== ① 量价分布 ==========
+  const priceVol = {};
+  trades.forEach(t => {
+    const p = getP(t), q = getQ(t);
+    const key = p.toFixed(p >= 1000 ? 0 : p >= 1 ? 2 : 4);
+    if (!priceVol[key]) priceVol[key] = { price: p, buy: 0, sell: 0, count: 0 };
+    if (isBuy(t)) priceVol[key].buy += q; else priceVol[key].sell += q;
+    priceVol[key].count++;
+  });
+  const levels = Object.values(priceVol).sort((a, b) => b.price - a.price);
+  const maxVol = Math.max(...levels.map(l => l.buy + l.sell), 1);
+  const poc = levels.reduce((m, l) => (l.buy + l.sell) > (m.buy + m.sell) ? l : m, levels[0]);
+
+  // 取成交量前12个价位
+  const top12 = levels.slice(0, Math.min(12, levels.length));
+  $("xrayProfile").innerHTML = top12.map(l => {
+    const total = l.buy + l.sell;
+    const w = (total / maxVol * 100).toFixed(0);
+    const buyPct = total > 0 ? (l.buy / total * 100) : 50;
+    const isPOC = l === poc;
+    const cls = buyPct > 60 ? "buy" : buyPct < 40 ? "sell" : "mixed";
+    return `<div class="vp-row">
+      <span class="vp-price ${isPOC ? "poc" : ""}">${fmtP(l.price)}${isPOC ? " ★" : ""}</span>
+      <span class="vp-bar-wrap">
+        <span class="vp-bar ${cls}" style="width:${w}%"></span>
+      </span>
+      <span class="vp-buy">${buyPct.toFixed(0)}%买</span>
+      <span class="vp-sell">${l.count}笔</span>
+    </div>`;
+  }).join("");
+
+  const pocTotal = poc.buy + poc.sell;
+  const abovePOC = levels.filter(l => l.price > poc.price).reduce((s, l) => s + l.buy + l.sell, 0);
+  const belowPOC = levels.filter(l => l.price < poc.price).reduce((s, l) => s + l.buy + l.sell, 0);
+  $("xrayProfileInsight").innerHTML = `
+    <b>成交最密集价位: ${fmtP(poc.price)}</b>（${poc.count}笔，占总成交${(pocTotal / trades.length * 100).toFixed(0)}%的笔数）—— 这是买卖双方<b>共识最强的"公允价格"</b>。<br>
+    上方成交${abovePOC > belowPOC ? "更多" : "更少"}（${(abovePOC / (abovePOC + belowPOC) * 100).toFixed(0)}%），
+    ${abovePOC > belowPOC ? "说明追高意愿强，买方愿意溢价买入" : "说明上方抛压重，卖方在高位积极出货"}。`;
+
+  // ========== ② 交易者画像 ==========
+  const cats = [
+    { label: "🧑 散户", max: 1000, cls: "retail", buy: 0, sell: 0, n: 0 },
+    { label: "🧑‍💼 中户", max: 10000, cls: "mid", buy: 0, sell: 0, n: 0 },
+    { label: "🏦 大户", max: 100000, cls: "whale", buy: 0, sell: 0, n: 0 },
+    { label: "🐋 鲸鱼", max: Infinity, cls: "whale", buy: 0, sell: 0, n: 0 },
+  ];
+  trades.forEach(t => {
+    const usd = getP(t) * getQ(t);
+    const c = cats.find(c => usd < c.max) || cats[3];
+    if (isBuy(t)) c.buy += usd; else c.sell += usd;
+    c.n++;
+  });
+
+  $("xrayTraders").innerHTML = cats.map(c => {
+    const total = c.buy + c.sell;
+    if (total === 0) return "";
+    const buyPct = c.buy / total * 100;
+    const wBuy = buyPct.toFixed(0);
+    const verdict = buyPct > 60 ? '<span style="color:var(--up)">净买入</span>'
+                  : buyPct < 40 ? '<span style="color:var(--down)">净卖出</span>'
+                  : '<span style="color:var(--muted)">均衡</span>';
+    return `<div class="tr-row">
+      <span class="tr-label ${c.cls}">${c.label}</span>
+      <span class="tr-bar-wrap">
+        <span class="tr-buy-bar" style="width:${wBuy}%"></span>
+        <span class="tr-sell-bar" style="width:${100 - wBuy}%"></span>
+      </span>
+      <span class="tr-buypct">${wBuy}%</span>
+      <span class="tr-sellpct">${c.n}笔</span>
+      <span class="tr-verdict">${verdict}</span>
+    </div>`;
+  }).join("");
+
+  const whale = cats[3], retail = cats[0];
+  let traderInsight = "";
+  if (whale.n > 0 && retail.n > 0) {
+    const wBuyPct = (whale.buy / (whale.buy + whale.sell) * 100).toFixed(0);
+    const rBuyPct = (retail.buy / (retail.buy + retail.sell) * 100).toFixed(0);
+    if (wBuyPct > 55 && rBuyPct < 45) {
+      traderInsight = `<b>经典吸筹模式</b>：鲸鱼${wBuyPct}%在买，散户${rBuyPct}%在卖——大资金在接散户的恐慌抛售，通常是底部特征。`;
+    } else if (wBuyPct < 45 && rBuyPct > 55) {
+      traderInsight = `<b>经典派发模式</b>：鲸鱼在卖（${wBuyPct}%买），散户在追（${rBuyPct}%买）——大资金在高位出货给FOMO散户，通常是顶部特征。⚠️危险`;
+    } else {
+      traderInsight = `鲸鱼买占比${wBuyPct}%，散户买占比${rBuyPct}%——方向基本一致，暂无明显分歧。`;
+    }
+  }
+  $("xrayTraderInsight").innerHTML = traderInsight || "样本不足，等待更多成交数据。";
+
+  // ========== ③ 共识分析 ==========
+  const ratios = trades.map(t => 0.5); // fallback
+  const totalBuy = trades.filter(t => isBuy(t)).reduce((s, t) => s + getP(t) * getQ(t), 0);
+  const totalSell = trades.filter(t => !isBuy(t)).reduce((s, t) => s + getP(t) * getQ(t), 0);
+  const total = totalBuy + totalSell || 1;
+  const overallBuyPct = totalBuy / total * 100;
+
+  // 共识强度: 用买卖占比偏离50%的程度衡量
+  const deviation = Math.abs(overallBuyPct - 50);
+  const consensusLevel = deviation < 3 ? "高度分歧" : deviation < 8 ? "略有分歧" : deviation < 15 ? "方向一致" : "强烈共识";
+  const consensusColor = deviation < 3 ? "var(--muted)" : deviation < 8 ? "#f0b90b" : "var(--down)";
+
+  // 每分钟成交笔数(活跃度)
+  const timeSpan = trades.length > 1 ? (+trades[trades.length-1][dataSource === "okx" ? "ts" : "T"] - +trades[0][dataSource === "okx" ? "ts" : "T"]) / 60000 : 1;
+  const tradesPerMin = (trades.length / Math.max(1, timeSpan)).toFixed(0);
+
+  $("xrayConsensus").innerHTML = `
+    <div class="con-row">
+      <span class="con-label">整体方向</span>
+      <span class="con-bar-wrap"><span class="con-fill" style="width:${overallBuyPct}%;background:${overallBuyPct >= 50 ? "var(--up)" : "var(--down)"}"></span></span>
+      <span class="con-val" style="color:${overallBuyPct >= 50 ? "var(--up)" : "var(--down)"}">${overallBuyPct >= 50 ? "买方" : "卖方"} ${overallBuyPct.toFixed(1)}%</span>
+    </div>
+    <div class="con-row">
+      <span class="con-label">共识程度</span>
+      <span class="con-bar-wrap"><span class="con-fill" style="width:${Math.min(100, deviation * 5)}%;background:${consensusColor}"></span></span>
+      <span class="con-val" style="color:${consensusColor}">${consensusLevel}</span>
+    </div>
+    <div class="con-row">
+      <span class="con-label">交易活跃度</span>
+      <span class="con-bar-wrap"><span class="con-fill" style="width:${Math.min(100, tradesPerMin)}%;background:var(--purple)"></span></span>
+      <span class="con-val">${tradesPerMin}笔/分钟</span>
+    </div>
+    <div class="con-row">
+      <span class="con-label">公允价格(POC)</span>
+      <span></span>
+      <span class="con-val" style="color:var(--accent)">${fmtP(poc.price)}</span>
+    </div>`;
+
+  const consensusInsight = overallBuyPct > 60
+    ? `<b>买方主导</b>（${overallBuyPct.toFixed(1)}%）：市场共识偏多，主动买入明显超过卖出。交易者期望价格继续上涨。`
+    : overallBuyPct < 40
+    ? `<b>卖方主导</b>（${(100 - overallBuyPct).toFixed(1)}%）：市场共识偏空，主动卖出占优。交易者预期价格下跌，正在积极出货。`
+    : `市场接近均衡（买${overallBuyPct.toFixed(1)}%）：买卖双方对价格方向<b>没有共识</b>，处于博弈状态。此时趋势不明，建议等待突破。`;
+  $("xrayConsensusInsight").innerHTML = consensusInsight;
+}
+
 // ==================== 总市值图表 ====================
 let mcCurveCache = null;
 async function renderMCChart() {
