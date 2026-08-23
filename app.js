@@ -3,15 +3,38 @@
 
 // ==================== 配置 ====================
 const HOSTS = ["https://data-api.binance.vision", "https://api.binance.com", "https://api1.binance.com"];
-const SYMBOLS = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "TRXUSDT"];
+// 30币池: 币安与OKX双所共上线, 按双所合计流动性排序(主流8币+双所交集22币)
+const SYMBOLS = [
+  "BTCUSDT", "ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "DOGEUSDT", "ADAUSDT", "TRXUSDT",
+  "ZECUSDT", "REUSDT", "TRUMPUSDT", "PUMPUSDT", "ENAUSDT", "PEPEUSDT", "SUIUSDT", "LINKUSDT",
+  "NEARUSDT", "UNIUSDT", "AAVEUSDT", "XLMUSDT", "LTCUSDT", "WLDUSDT", "TAOUSDT", "ONDOUSDT",
+  "XPLUSDT", "AVAXUSDT", "BCHUSDT", "ZROUSDT", "HBARUSDT", "POLUSDT",
+];
 const META = {
   BTCUSDT: { sym: "BTC", name: "比特币" }, ETHUSDT: { sym: "ETH", name: "以太坊" },
   BNBUSDT: { sym: "BNB", name: "" }, SOLUSDT: { sym: "SOL", name: "" },
   XRPUSDT: { sym: "XRP", name: "瑞波币" }, DOGEUSDT: { sym: "DOGE", name: "狗狗币" },
-  ADAUSDT: { sym: "ADA", name: "艾达币" }, TRXUSDT: { sym: "TRX", name: "波场" }
+  ADAUSDT: { sym: "ADA", name: "艾达币" }, TRXUSDT: { sym: "TRX", name: "波场" },
+  ZECUSDT: { sym: "ZEC", name: "大零币" }, REUSDT: { sym: "RE", name: "" },
+  TRUMPUSDT: { sym: "TRUMP", name: "特朗普币" }, PUMPUSDT: { sym: "PUMP", name: "" },
+  ENAUSDT: { sym: "ENA", name: "" }, PEPEUSDT: { sym: "PEPE", name: "佩佩蛙" },
+  SUIUSDT: { sym: "SUI", name: "" }, LINKUSDT: { sym: "LINK", name: "链环" },
+  NEARUSDT: { sym: "NEAR", name: "" }, UNIUSDT: { sym: "UNI", name: "" },
+  AAVEUSDT: { sym: "AAVE", name: "" }, XLMUSDT: { sym: "XLM", name: "恒星币" },
+  LTCUSDT: { sym: "LTC", name: "莱特币" }, WLDUSDT: { sym: "WLD", name: "" },
+  TAOUSDT: { sym: "TAO", name: "" }, ONDOUSDT: { sym: "ONDO", name: "" },
+  XPLUSDT: { sym: "XPL", name: "" }, AVAXUSDT: { sym: "AVAX", name: "雪崩" },
+  BCHUSDT: { sym: "BCH", name: "比特现金" }, ZROUSDT: { sym: "ZRO", name: "zkSync" },
+  HBARUSDT: { sym: "HBAR", name: "" }, POLUSDT: { sym: "POL", name: "Polygon" },
 };
-const MC_WEIGHTS = { BTCUSDT: 0.584, ETHUSDT: 0.12, BNBUSDT: 0.035, SOLUSDT: 0.03,
-                     XRPUSDT: 0.025, DOGEUSDT: 0.012, ADAUSDT: 0.008, TRXUSDT: 0.007 };
+// 大盘指数权重(估算市值占比, 仅用于相对形态, 归一化后使用)
+const MC_WEIGHTS = { BTCUSDT: 0.58, ETHUSDT: 0.12, BNBUSDT: 0.018, SOLUSDT: 0.03,
+  XRPUSDT: 0.025, DOGEUSDT: 0.012, ADAUSDT: 0.008, TRXUSDT: 0.007, ZECUSDT: 0.0022,
+  REUSDT: 0.0008, TRUMPUSDT: 0.0012, PUMPUSDT: 0.0015, ENAUSDT: 0.0015, PEPEUSDT: 0.004,
+  SUIUSDT: 0.0045, LINKUSDT: 0.005, NEARUSDT: 0.003, UNIUSDT: 0.003, AAVEUSDT: 0.003,
+  XLMUSDT: 0.0022, LTCUSDT: 0.006, WLDUSDT: 0.0015, TAOUSDT: 0.003, ONDOUSDT: 0.002,
+  XPLUSDT: 0.001, AVAXUSDT: 0.004, BCHUSDT: 0.005, ZROUSDT: 0.0015, HBARUSDT: 0.0022,
+  POLUSDT: 0.002 };
 
 const $ = (id) => document.getElementById(id);
 const fmtP = (p) => p >= 1000 ? p.toLocaleString("en-US", { maximumFractionDigits: 0 }) : p >= 1 ? p.toFixed(2) : p >= 0.01 ? p.toFixed(4) : p.toPrecision(4);
@@ -86,17 +109,20 @@ async function apiGet(path) {
 
 // ==================== 数据获取 ====================
 let fetchGen = 0;   // 请求代数: 切换币种后, 旧币种的在途请求返回时作废, 防止覆盖新币数据
+let lastHourly = 0; // 全池1hK线节流: 30币每5s拉一轮会被限速, 60s拉一次足够
 async function fetchAll() {
   const gen = ++fetchGen;
   const target = coin;   // 本次请求针对的币种
   $("statusDot").className = "dot";
   try {
     // 基础数据始终从币安(K线/行情), 大单和盘口按数据源切换
+    const need1h = Date.now() - lastHourly > 60000;
     const [k5, tickers, all1h] = await Promise.all([
       apiGet(`/api/v3/klines?symbol=${coin}&interval=5m&limit=49`),
       apiGet(`/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(SYMBOLS))}`),
-      Promise.all(SYMBOLS.map(s => apiGet(`/api/v3/klines?symbol=${s}&interval=1h&limit=25}`).catch(() => null))),
+      need1h ? Promise.all(SYMBOLS.map(s => apiGet(`/api/v3/klines?symbol=${s}&interval=1h&limit=25}`).catch(() => null))) : null,
     ]);
+    if (need1h) lastHourly = Date.now();
 
     // 大单 + 盘口按数据源
     let tr = [], dep = null;
@@ -120,12 +146,12 @@ async function fetchAll() {
     tickers.forEach(t => tickerMap[t.symbol] = t);
     price = tickerMap[coin] ? parseFloat(tickerMap[coin].lastPrice) : 0;
     priceCoin = coin;
-    SYMBOLS.forEach((s, i) => { if (all1h[i]) klines1h[s] = all1h[i]; });
+    if (need1h) SYMBOLS.forEach((s, i) => { if (all1h[i]) klines1h[s] = all1h[i]; });
     trades = tr;
     depth = dep;
 
     // 计算大单方向(统一格式)
-    const minQ = getMinTradeQty(coin);
+    const minQ = getMinTradeQty(coin, price);
     const isBuy = (t) => dataSource === "okx" ? t.buy : t.m === false;
     const qty = (t) => dataSource === "okx" ? t.q : parseFloat(t.q);
     const large = tr.filter(t => qty(t) >= minQ);
@@ -148,10 +174,12 @@ async function fetchAll() {
   }
 }
 
-function getMinTradeQty(sym) {
+// 大单门槛: 已配置币种用固定值, 其余按~1万U名义额动态计算
+function getMinTradeQty(sym, px) {
   const map = { BTCUSDT: 0.5, ETHUSDT: 10, BNBUSDT: 10, SOLUSDT: 50,
                 XRPUSDT: 10000, DOGEUSDT: 50000, ADAUSDT: 5000, TRXUSDT: 50000 };
-  return map[sym] || 1;
+  if (map[sym]) return map[sym];
+  return px > 0 ? Math.max(1, Math.ceil(10000 / px)) : 1;
 }
 
 // 取某币种最新价: 优先当前实时价, 回退到24h行情缓存
@@ -540,8 +568,13 @@ let mcCurveCache = null;
 async function renderMCChart() {
   if (!globalMC) return;
   try {
-    const arr = await Promise.all(SYMBOLS.map(s =>
-      apiGet(`/api/v3/klines?symbol=${s}&interval=5m&limit=49`).catch(() => null)));
+    // 30币全池5mK线60s拉一次, 其余轮次用缓存重绘
+    if (!renderMCChart.batch || Date.now() - (renderMCChart.t || 0) > 60000) {
+      renderMCChart.batch = await Promise.all(SYMBOLS.map(s =>
+        apiGet(`/api/v3/klines?symbol=${s}&interval=5m&limit=49`).catch(() => null)));
+      renderMCChart.t = Date.now();
+    }
+    const arr = renderMCChart.batch;
     const valid = SYMBOLS.filter((_, i) => arr[i] && arr[i].length >= 48);
     if (valid.length < 3) return;
     const n = 48;
@@ -733,7 +766,7 @@ function renderTrends() {
 // ==================== 大单成交 ====================
 function renderTrades() {
   if (!trades.length) { $("tradesArea").innerHTML = "<span class='loading'>无成交数据</span>"; return; }
-  const minQ = getMinTradeQty(coin);
+  const minQ = getMinTradeQty(coin, priceOf(coin));
   const seen = new Set();
   const isBuy = (t) => dataSource === "okx" ? t.buy : t.m === false;
   const getQ = (t) => dataSource === "okx" ? t.q : parseFloat(t.q);
@@ -1638,6 +1671,10 @@ $("exportBtn").addEventListener("click", () => {
 });
 
 // ==================== 事件 & 初始化 ====================
+// 币种下拉从SYMBOLS自动生成(30币双所币池)
+$("coinSel").innerHTML = SYMBOLS.map(s =>
+  `<option value="${s}">${META[s].sym}${META[s].name ? " " + META[s].name : ""}</option>`).join("");
+$("coinSel").value = coin;
 $("coinSel").addEventListener("change", (e) => {
   coin = e.target.value;
   wallHistory.clear();

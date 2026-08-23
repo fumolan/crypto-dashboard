@@ -84,7 +84,7 @@ body {
   overflow-x: auto;
 }
 .coin-chip {
-  flex: 1;
+  flex: 1 0 100px;
   min-width: 100px;
   background: var(--card);
   border: 1px solid var(--border);
@@ -414,7 +414,7 @@ body {
 .forward-card { grid-column: span 1; }
 
 /* ---------- 趋势解读 ---------- */
-.trend-list { display: flex; flex-direction: column; gap: 2px; }
+.trend-list { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow-y: auto; }
 .trend-row {
   display: flex;
   gap: 8px;
