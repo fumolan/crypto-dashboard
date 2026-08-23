@@ -24,6 +24,7 @@ const fmtClock = (d) => d.toLocaleTimeString("zh-CN", { hour12: false });
 let coin = "BTCUSDT";
 let dataSource = "binance";   // binance | okx
 let price = 0;
+let priceCoin = null;   // price属于哪个币种(防止切换币种时串价)
 let klines5m = [];      // 4H 5分钟线(图表用)
 let klines1h = {};      // 各币1小时线(趋势/信号用)
 let trades = [];        // 大单
@@ -112,6 +113,7 @@ async function fetchAll() {
     const tickerMap = {};
     tickers.forEach(t => tickerMap[t.symbol] = t);
     price = tickerMap[coin] ? parseFloat(tickerMap[coin].lastPrice) : 0;
+    priceCoin = coin;
     SYMBOLS.forEach((s, i) => { if (all1h[i]) klines1h[s] = all1h[i]; });
     trades = tr;
     depth = dep;
@@ -143,6 +145,14 @@ function getMinTradeQty(sym) {
   const map = { BTCUSDT: 0.5, ETHUSDT: 10, BNBUSDT: 10, SOLUSDT: 50,
                 XRPUSDT: 10000, DOGEUSDT: 50000, ADAUSDT: 5000, TRXUSDT: 50000 };
   return map[sym] || 1;
+}
+
+// 取某币种最新价: 优先当前实时价, 回退到24h行情缓存
+// 防止切换币种瞬间用上一个币的价格结算(BTC仓被DOGE价平仓的事故)
+function priceOf(sym) {
+  if (priceCoin === sym && price > 0) return price;
+  const t = tickerCache[sym];
+  return t ? parseFloat(t.lastPrice) : 0;
 }
 
 // ==================== 渲染调度 ====================
@@ -1100,7 +1110,7 @@ function updateSimPreview() {
 $("simConfirm").addEventListener("click", () => {
   const m = +$("simMargin").value || 100;
   const lev = Math.min(125, Math.max(1, +$("simLev").value || 10));
-  if (price <= 0) return;
+  if (price <= 0 || priceCoin !== coin) return;
   const list = loadSim();
   // 防重复: 同币种+同方向+策略仓只能有一个未完结的
   const dup = list.some(t => t.coin === coin && t.direction === simDirection &&
@@ -1142,7 +1152,8 @@ function checkSimTrades() {
   let changed = false;
 
   list.forEach(t => {
-    if (t.coin !== coin || !price) return;
+    // priceCoin校验: 切换币种后新数据未到时, price还是旧币种的价, 不能用
+    if (t.coin !== coin || priceCoin !== coin || !price) return;
 
     // 等待中: 检查对应方向的信号是否触发
     if (t.status === "waiting") {
@@ -1249,18 +1260,19 @@ function renderOneActive(t) {
 
   const typeTag = t.tradeType === "impulse" ? "🔥冲动" : "📊策略";
   const qty = t.margin * t.leverage / t.entryPrice;
-  const curPct = isLong ? (price / t.entryPrice - 1) : (1 - price / t.entryPrice);
+  const cur = priceOf(t.coin) || t.entryPrice;
+  const curPct = isLong ? (cur / t.entryPrice - 1) : (1 - cur / t.entryPrice);
   const uPnl = t.margin * t.leverage * curPct;
   const uRoi = curPct * t.leverage * 100;
   const pnlCls = uPnl >= 0 ? "pos" : "neg";
-  const distTP = Math.abs((t.tpPrice / price - 1) * 100).toFixed(2);
-  const distSL = Math.abs((t.slPrice / price - 1) * 100).toFixed(2);
-  const distLiq = Math.abs((t.liqPrice / price - 1) * 100).toFixed(2);
+  const distTP = Math.abs((t.tpPrice / cur - 1) * 100).toFixed(2);
+  const distSL = Math.abs((t.slPrice / cur - 1) * 100).toFixed(2);
+  const distLiq = Math.abs((t.liqPrice / cur - 1) * 100).toFixed(2);
 
   return `
     <div class="sa-status open">🟢 持仓中 [${typeTag}]: ${isLong ? "做多" : "做空"} ${t.sym} ${t.leverage}x</div>
     <div class="sa-row"><span class="l">入场</span><span class="v">${fmtP(t.entryPrice)} (${new Date(t.entryTime).toLocaleTimeString("zh-CN", {hour12:false})})</span></div>
-    <div class="sa-row"><span class="l">当前价</span><span class="v">${fmtP(price)}</span></div>
+    <div class="sa-row"><span class="l">当前价</span><span class="v">${fmtP(cur)}</span></div>
     <div class="sa-pnl ${pnlCls}">${uPnl >= 0 ? "+" : ""}$${uPnl.toFixed(2)} (${uRoi >= 0 ? "+" : ""}${uRoi.toFixed(1)}%)</div>
     <div class="sa-row"><span class="l">止盈</span><span class="v" style="color:var(--down)">${fmtP(t.tpPrice)} (距${distTP}%)</span></div>
     <div class="sa-row"><span class="l">止损</span><span class="v" style="color:var(--up)">${fmtP(t.slPrice)} (距${distSL}%)</span></div>
@@ -1273,14 +1285,14 @@ function renderOneActive(t) {
     </div>`;
 }
 
-// 平仓: 以当前价格结算
+// 平仓: 以该币种最新价结算(不用全局price, 防跨币种串价)
 function closeSimTrade(id) {
   const list = loadSim();
   const t = list.find(x => x.id === id);
   if (!t || t.status !== "open") return;
-  if (!price || price <= 0) { alert("价格未加载"); return; }
+  const exitP = priceOf(t.coin);
+  if (!exitP || exitP <= 0) { alert("价格未加载, 请稍后重试"); return; }
   const isLong = t.direction === "long";
-  const exitP = price;
   const pl = isLong ? (exitP / t.entryPrice - 1) : (1 - exitP / t.entryPrice);
   t.status = "manual";
   t.exitPrice = exitP;
@@ -1325,7 +1337,7 @@ function editSimTrade(id) {
 function openImpulse(dir) {
   const m = Math.max(1, +$("margin").value || 100);
   const lev = Math.min(125, Math.max(1, +$("lev").value || 10));
-  if (price <= 0) return;
+  if (price <= 0 || priceCoin !== coin) return;
   const list = loadSim();
   // 防误触: 3秒内同方向不允许重复开仓
   const recent = list.some(t => t.coin === coin && t.direction === dir &&
