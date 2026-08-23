@@ -1070,6 +1070,13 @@ $("simConfirm").addEventListener("click", () => {
   const m = +$("simMargin").value || 100;
   const lev = Math.min(125, Math.max(1, +$("simLev").value || 10));
   const list = loadSim();
+  // 防重复: 同币种+同方向+策略仓只能有一个未完结的
+  const dup = list.some(t => t.coin === coin && t.direction === simDirection &&
+    t.tradeType !== "impulse" && (t.status === "waiting" || t.status === "open"));
+  if (dup) {
+    alert(`已有 ${META[coin].sym} 的${simDirection === "long" ? "做多" : "做空"}策略仓在运行`);
+    return;
+  }
   list.push({
     id: Date.now(),
     tradeType: "strategy",
@@ -1257,11 +1264,14 @@ function editSimTrade(id) {
 
 // ==================== 冲动开仓: 不等信号立即成交 ====================
 function openImpulse(dir) {
-  // 直接读取计算器卡片的保证金和杠杆
   const m = Math.max(1, +$("margin").value || 100);
   const lev = Math.min(125, Math.max(1, +$("lev").value || 10));
   if (price <= 0) return;
   const list = loadSim();
+  // 防误触: 3秒内同方向不允许重复开仓
+  const recent = list.some(t => t.coin === coin && t.direction === dir &&
+    t.tradeType === "impulse" && Date.now() - t.id < 3000);
+  if (recent) return;
   const isLong = dir === "long";
   const imr = 1 / lev, mmr = 0.005;
   const score = getCurrentSignalScore(dir);
