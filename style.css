@@ -413,6 +413,24 @@ body {
 /* ---------- 前向验证 ---------- */
 .forward-card { grid-column: span 1; }
 
+/* ---------- 开仓机会扫描 ---------- */
+.scan-list { display: flex; flex-direction: column; gap: 4px; max-height: 62vh; overflow-y: auto; }
+.scan-row {
+  display: flex; gap: 10px; align-items: center;
+  padding: 6px 10px; border-radius: 6px; background: var(--bg);
+  font-size: 12px; cursor: pointer; border: 1px solid transparent;
+}
+.scan-row:hover { border-color: var(--accent); }
+.scan-row.hit { background: rgba(240, 185, 11, 0.06); }
+.scan-row.hit.strong { border-color: rgba(229, 69, 69, 0.35); }
+.sr-sym { width: 50px; font-weight: 700; flex-shrink: 0; }
+.sr-verdict { width: 74px; font-weight: 700; flex-shrink: 0; }
+.sr-score { width: 88px; flex-shrink: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sr-hits { flex: 1; color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sr-chg { width: 56px; text-align: right; flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sr-chg.up { color: var(--up); }
+.sr-chg.down { color: var(--down); }
+
 /* ---------- 趋势解读 ---------- */
 .trend-list { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow-y: auto; }
 .trend-row {

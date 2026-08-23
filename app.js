@@ -619,11 +619,13 @@ function drawMCCurve(curve, ref) {
 }
 
 // ==================== 信号共振 ====================
-function renderSignals(tickerMap) {
-  const kl = klines1h[coin];
+// ==================== 信号计算(纯函数, 任意币种可用) ====================
+// tr: 成交列表(币安原始或OKX归一格式皆可); 返回该币的多/空信号与得分
+function computeCoinSignals(sym, tr) {
+  const kl = klines1h[sym];
+  const px = priceOf(sym) || (kl && kl.length ? +kl[kl.length - 1][4] : 0);
   const longSigs = [], shortSigs = [];
 
-  // ===== 公用数据 =====
   let ratio = 0.5, trendData = null, minLow = 0, maxHigh = 0, distLow = 99, distHigh = 99;
   if (kl && kl.length >= 24) {
     const done = kl.slice(0, -1);
@@ -635,13 +637,20 @@ function renderSignals(tickerMap) {
     const highs = done.map(k => +k[2]);
     minLow = Math.min(...lows);
     maxHigh = Math.max(...highs);
-    if (price > 0) {
-      distLow = (price / minLow - 1) * 100;
-      distHigh = (maxHigh / price - 1) * 100;
+    if (px > 0) {
+      distLow = (px / minLow - 1) * 100;
+      distHigh = (maxHigh / px - 1) * 100;
     }
   }
-  const hasWhale = lastWhaleBuyQ > 0 || lastWhaleSellQ > 0;
-  const wRatio = lastWhaleSellQ > 0 ? lastWhaleBuyQ / lastWhaleSellQ : (lastWhaleBuyQ > 0 ? 99 : 0);
+  // 该币自己的大单方向
+  const minQ = getMinTradeQty(sym, px);
+  const isBuy = (t) => t.buy !== undefined ? t.buy : t.m === false;
+  const qOf = (t) => +t.q;
+  const large = tr.filter(t => qOf(t) >= minQ);
+  const wBuy = large.filter(t => isBuy(t)).reduce((s, t) => s + qOf(t), 0);
+  const wSell = large.filter(t => !isBuy(t)).reduce((s, t) => s + qOf(t), 0);
+  const hasWhale = wBuy > 0 || wSell > 0;
+  const wRatio = wSell > 0 ? wBuy / wSell : (wBuy > 0 ? 99 : 0);
 
   // ===== 做多信号 =====
   longSigs.push({ num: "①", name: "买盘主导", ok: ratio > 0.55, val: `${(ratio*100).toFixed(1)}%`, thresh: ">55%", prog: Math.min(100, ratio/0.55*100), pts: 25 });
@@ -655,6 +664,15 @@ function renderSignals(tickerMap) {
   shortSigs.push({ num: "③", name: "量价配合", ok: trendData ? (trendData.direction==="down" && trendData.volume!=="light") : false, val: trendData ? trendText(trendData) : "--", thresh: "下跌+放量", prog: trendData ? (trendData.direction==="down" ? (trendData.volume!=="light"?100:50) : 20) : 0, pts: 25 });
   shortSigs.push({ num: "④", name: "近阻力", ok: distHigh < 2, val: `距高${distHigh.toFixed(1)}%`, thresh: "<2%", prog: Math.max(0, 100-distHigh/2*100), pts: 25 });
 
+  return {
+    longSigs, shortSigs,
+    longScore: longSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0),
+    shortScore: shortSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0),
+  };
+}
+
+function renderSignals(tickerMap) {
+  const { longSigs, shortSigs } = computeCoinSignals(coin, trades);
   longScore = longSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
   shortScore = shortSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
 
@@ -712,6 +730,73 @@ function renderSignals(tickerMap) {
   const v = $("signalVerdict");
   v.innerHTML = `${direction}<br><span style="font-size:10px;font-weight:400;color:var(--muted)">${dirReason}</span>`;
   v.className = "verdict " + dirColor;
+}
+
+// ==================== 开仓机会扫描(全池30币) ====================
+let scanBusy = false;
+function scanVerdict(ls, ss) {
+  if (ls >= 75 && ls > ss + 25) return { tag: "📈 做多", dir: "long", color: "var(--up)", strong: true };
+  if (ss >= 75 && ss > ls + 25) return { tag: "📉 做空", dir: "short", color: "var(--down)", strong: true };
+  if (ls >= 50 && ls > ss + 15) return { tag: "偏多观望", dir: "long", color: "var(--accent)", strong: false };
+  if (ss >= 50 && ss > ls + 15) return { tag: "偏空观望", dir: "short", color: "var(--accent)", strong: false };
+  return null;
+}
+
+async function scanOpportunities() {
+  if (scanBusy) return;
+  scanBusy = true;
+  $("scanOverlay").classList.remove("hidden");
+  $("scanSummary").textContent = "";
+  const listEl = $("scanList");
+  const results = [];
+  try {
+    // 每批6个并发, 30币约3-4秒扫完; 大单逐币拉取, K线用缓存
+    for (let i = 0; i < SYMBOLS.length; i += 6) {
+      const batch = SYMBOLS.slice(i, i + 6);
+      const rs = await Promise.all(batch.map(async s => {
+        const tr = await apiGet(`/api/v3/aggTrades?symbol=${s}&limit=1000`).catch(() => []);
+        return Object.assign({ s }, computeCoinSignals(s, tr));
+      }));
+      results.push(...rs);
+      listEl.innerHTML = `<span class='loading'>⏳ 扫描中 ${results.length}/${SYMBOLS.length} …</span>`;
+    }
+    renderScanResults(results);
+  } catch (e) {
+    listEl.innerHTML = "<span class='loading'>扫描失败, 稍后再试</span>";
+  }
+  scanBusy = false;
+}
+
+function renderScanResults(results) {
+  const rows = results.map(r => Object.assign(r, { v: scanVerdict(r.longScore, r.shortScore) }));
+  const hits = rows.filter(r => r.v);
+  rows.sort((a, b) => Math.max(b.longScore, b.shortScore) - Math.max(a.longScore, a.shortScore));
+  $("scanSummary").innerHTML = `可开仓 <b style="color:var(--accent)">${hits.length}</b>/${SYMBOLS.length} (含观望级)`;
+  $("scanList").innerHTML = rows.map(r => {
+    const m = r.v;
+    const t = tickerCache[r.s];
+    const chg = t ? parseFloat(t.priceChangePercent) : 0;
+    const hitTxt = m ? m.dir === "long" ? r.longSigs : r.shortSigs
+      : [];
+    const hits = hitTxt.filter(x => x.ok).map(x => x.name).join(" · ");
+    return `<div class="scan-row${m ? (m.strong ? " hit strong" : " hit") : ""}" data-sym="${r.s}">
+      <span class="sr-sym">${META[r.s].sym}</span>
+      <span class="sr-verdict" style="color:${m ? m.color : "var(--muted)"}">${m ? m.tag : "— 不开仓"}</span>
+      <span class="sr-score">多${r.longScore}/空${r.shortScore}</span>
+      <span class="sr-hits">${hits}</span>
+      <span class="sr-chg ${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>
+    </div>`;
+  }).join("");
+  $("scanList").querySelectorAll(".scan-row").forEach(el => {
+    el.addEventListener("click", () => {
+      coin = el.dataset.sym;
+      $("coinSel").value = coin;
+      wallHistory.clear();
+      $("entry").value = "";
+      $("scanOverlay").classList.add("hidden");
+      fetchAll();
+    });
+  });
 }
 
 // ==================== 趋势解读 ====================
@@ -1704,6 +1789,22 @@ $("btLong").addEventListener("click", () => runBacktest("long"));
 $("btShort").addEventListener("click", () => runBacktest("short"));
 ["lev", "margin", "entry", "exitP", "mmr"].forEach(id =>
   $(id).addEventListener("input", updateCalc));
+
+// ===== 开仓扫描: 按钮S快捷键 + 弹窗关闭 =====
+$("scanBtn").addEventListener("click", scanOpportunities);
+$("scanClose").addEventListener("click", () => $("scanOverlay").classList.add("hidden"));
+$("scanOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "scanOverlay") $("scanOverlay").classList.add("hidden");
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") { $("scanOverlay").classList.add("hidden"); return; }
+  if ((e.key === "s" || e.key === "S") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "select" || tag === "textarea") return;
+    e.preventDefault();
+    scanOpportunities();
+  }
+});
 
 // 启动
 fetchAll();

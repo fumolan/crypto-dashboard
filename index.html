@@ -26,6 +26,7 @@
         <option value="60">60秒</option>
       </select>
       <button id="refreshBtn" title="立即刷新">🔄</button>
+      <button id="scanBtn" title="扫描30币开仓机会 (快捷键 S)">🎯 扫描</button>
     </div>
     <div class="status">
       <span class="dot" id="statusDot"></span>
@@ -154,6 +155,20 @@
   <footer>
     数据源: Binance 公开API + CoinGecko · 全部模块由全局币种选择器联动 · <span id="dataRange"></span>
   </footer>
+
+  <!-- 开仓机会扫描弹框 -->
+  <div class="xray-overlay hidden" id="scanOverlay">
+    <div class="xray-modal" style="max-width:600px">
+      <div class="xray-header">
+        <span class="xray-title">🎯 开仓机会扫描 <span id="scanSummary" class="sub"></span></span>
+        <button class="xray-close" id="scanClose">&times;</button>
+      </div>
+      <div class="xray-body">
+        <div class="xs-title">全池信号评分 <span class="sub">按最高分排序 · 点击币种直接跳转 · S键重扫</span></div>
+        <div id="scanList" class="scan-list"><span class="loading">按 S 或点按钮开始扫描</span></div>
+      </div>
+    </div>
+  </div>
 
   <!-- 成交透视弹框 -->
   <div class="xray-overlay hidden" id="xrayOverlay">
