@@ -66,7 +66,12 @@
   <!-- 第二行: 信号 + 趋势 + 计算器 -->
   <div class="grid analysis-row">
     <div class="card signal-card">
-      <div class="card-title">🎯 信号共振 <span id="signalScore" class="score">--</span></div>
+      <div class="card-title">🎯 信号计算器</div>
+      <div class="score-gauge">
+        <div class="sg-score" id="signalScore">--</div>
+        <div class="sg-bar"><div class="sg-fill" id="scoreBar"></div></div>
+        <div class="sg-ticks"><span>0</span><span>25</span><span>50</span><span>75</span><span>100</span></div>
+      </div>
       <div id="signalList" class="signal-list"><span class="loading">等待数据…</span></div>
       <div id="signalVerdict" class="verdict">--</div>
       <div class="bt-btns">

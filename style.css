@@ -148,7 +148,90 @@ body {
   margin-top: 6px;
 }
 
-/* ---------- 信号面板 ---------- */
+/* ---------- 信号计算器 ---------- */
+.score-gauge {
+  margin-bottom: 10px;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 8px;
+  text-align: center;
+}
+.sg-score {
+  font-size: 28px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 4px;
+}
+.sg-score.high { color: var(--down); }
+.sg-score.mid { color: var(--accent); }
+.sg-score.low { color: var(--up); }
+.sg-bar {
+  height: 12px;
+  background: rgba(42,50,66,0.5);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.sg-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.5s, background 0.3s;
+}
+.sg-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.sig-calc {
+  padding: 5px 8px;
+  background: var(--bg);
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+.sig-calc.passed { border-left: 3px solid var(--down); }
+.sig-calc.failed { border-left: 3px solid var(--border); }
+.sc-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.sc-num { color: var(--muted); font-size: 10px; width: 14px; }
+.sc-name { font-weight: 700; width: 60px; }
+.sc-pass { font-size: 10px; font-weight: 600; margin-left: auto; }
+.sc-pass.on { color: var(--down); }
+.sc-pass.off { color: var(--muted); }
+.sc-pts { font-weight: 800; font-variant-numeric: tabular-nums; width: 40px; text-align: right; }
+.sc-pts.on { color: var(--down); }
+.sc-pts.off { color: var(--muted); }
+.sc-detail {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+.sc-val { color: var(--text); font-weight: 600; }
+.sc-thresh { color: var(--muted); }
+.sc-bar {
+  height: 5px;
+  background: rgba(42,50,66,0.4);
+  border-radius: 2px;
+  margin-top: 3px;
+  overflow: hidden;
+}
+.sc-bar-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.4s;
+}
+.sc-bar-fill.pass { background: var(--down); }
+.sc-bar-fill.near { background: var(--accent); }
+.sc-bar-fill.far  { background: rgba(122,130,153,0.4); }
+
+/* ---------- 信号面板(旧) ---------- */
 .signal-list { display: flex; flex-direction: column; gap: 4px; }
 .sig-row {
   display: flex;
