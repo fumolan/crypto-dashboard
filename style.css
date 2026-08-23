@@ -52,6 +52,25 @@ body {
   cursor: pointer;
 }
 .controls button:hover { border-color: var(--accent); }
+
+.src-toggle { display: flex; }
+.src-btn {
+  background: var(--bg) !important;
+  color: var(--muted) !important;
+  border: 1px solid var(--border) !important;
+  padding: 5px 14px !important;
+  font-size: 12px !important;
+  cursor: pointer;
+  border-radius: 0 !important;
+}
+.src-btn:first-child { border-radius: 6px 0 0 6px !important; }
+.src-btn:last-child { border-radius: 0 6px 6px 0 !important; border-left: none !important; }
+.src-btn.active {
+  background: rgba(240, 185, 11, 0.15) !important;
+  border-color: var(--accent) !important;
+  color: var(--accent) !important;
+  font-weight: 700;
+}
 .status { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .dot.ok { background: var(--down); box-shadow: 0 0 6px var(--down); }

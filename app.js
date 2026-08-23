@@ -22,6 +22,7 @@ const fmtClock = (d) => d.toLocaleTimeString("zh-CN", { hour12: false });
 
 // ==================== 状态 ====================
 let coin = "BTCUSDT";
+let dataSource = "binance";   // binance | okx
 let price = 0;
 let klines5m = [];      // 4H 5分钟线(图表用)
 let klines1h = {};      // 各币1小时线(趋势/信号用)
@@ -31,6 +32,41 @@ let globalMC = 0;       // 总市值
 let wallHistory = new Map();
 let lastWhaleBuyQ = 0, lastWhaleSellQ = 0;
 let refreshTimer = null;
+
+// ==================== OKX API ====================
+const OKX = "https://www.okx.com";
+const okxInst = (s) => s.replace("USDT", "-USDT");
+
+async function okxGet(path) {
+  const r = await fetch(OKX + path, { signal: AbortSignal.timeout(10000) });
+  if (!r.ok) throw new Error("OKX HTTP " + r.status);
+  const j = await r.json();
+  if (j.code !== "0") throw new Error("OKX " + (j.msg || j.code));
+  return j.data || [];
+}
+
+async function fetchOKXTrades(sym) {
+  const instId = okxInst(sym);
+  const first = await okxGet(`/api/v5/market/trades?instId=${instId}&limit=500`);
+  let all = first.map(t => ({ p: +t.px, q: +t.sz, ts: +t.ts, buy: t.side === "buy", id: t.tradeId }));
+  let after = first.length ? first[first.length - 1].tradeId : null;
+  for (let i = 0; i < 2 && after; i++) {
+    const batch = await okxGet(`/api/v5/market/history-trades?instId=${instId}&limit=500&after=${after}`);
+    if (!batch.length) break;
+    all = all.concat(batch.map(t => ({ p: +t.px, q: +t.sz, ts: +t.ts, buy: t.side === "buy", id: t.tradeId })));
+    after = batch[batch.length - 1].tradeId;
+  }
+  return all;
+}
+
+async function fetchOKXDepth(sym) {
+  const d = await okxGet(`/api/v5/market/books?instId=${okxInst(sym)}&sz=400`);
+  if (!d[0]) throw new Error("OKX无盘口");
+  return {
+    bids: d[0].bids.map(x => [x[0], x[1]]),
+    asks: d[0].asks.map(x => [x[0], x[1]])
+  };
+}
 
 // ==================== API ====================
 async function apiGet(path) {
@@ -49,13 +85,26 @@ async function apiGet(path) {
 async function fetchAll() {
   $("statusDot").className = "dot";
   try {
-    const [k5, tickers, all1h, tr, dep] = await Promise.all([
+    // 基础数据始终从币安(K线/行情), 大单和盘口按数据源切换
+    const [k5, tickers, all1h] = await Promise.all([
       apiGet(`/api/v3/klines?symbol=${coin}&interval=5m&limit=49`),
       apiGet(`/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(SYMBOLS))}`),
       Promise.all(SYMBOLS.map(s => apiGet(`/api/v3/klines?symbol=${s}&interval=1h&limit=25`).catch(() => null))),
-      apiGet(`/api/v3/aggTrades?symbol=${coin}&limit=1000`).catch(() => []),
-      apiGet(`/api/v3/depth?symbol=${coin}&limit=100`).catch(() => null),
     ]);
+
+    // 大单 + 盘口按数据源
+    let tr = [], dep = null;
+    if (dataSource === "okx") {
+      [tr, dep] = await Promise.all([
+        fetchOKXTrades(coin).catch(() => []),
+        fetchOKXDepth(coin).catch(() => null),
+      ]);
+    } else {
+      [tr, dep] = await Promise.all([
+        apiGet(`/api/v3/aggTrades?symbol=${coin}&limit=1000`).catch(() => []),
+        apiGet(`/api/v3/depth?symbol=${coin}&limit=100`).catch(() => null),
+      ]);
+    }
 
     klines5m = k5;
     const tickerMap = {};
@@ -65,11 +114,13 @@ async function fetchAll() {
     trades = tr;
     depth = dep;
 
-    // 计算大单方向
+    // 计算大单方向(统一格式)
     const minQ = getMinTradeQty(coin);
-    const large = tr.filter(t => parseFloat(t.q) >= minQ);
-    lastWhaleBuyQ = large.filter(t => t.m === false).reduce((s, t) => s + parseFloat(t.q), 0);
-    lastWhaleSellQ = large.filter(t => t.m === true).reduce((s, t) => s + parseFloat(t.q), 0);
+    const isBuy = (t) => dataSource === "okx" ? t.buy : t.m === false;
+    const qty = (t) => dataSource === "okx" ? t.q : parseFloat(t.q);
+    const large = tr.filter(t => qty(t) >= minQ);
+    lastWhaleBuyQ = large.filter(t => isBuy(t)).reduce((s, t) => s + qty(t), 0);
+    lastWhaleSellQ = large.filter(t => !isBuy(t)).reduce((s, t) => s + qty(t), 0);
 
     // CoinGecko总市值(不阻塞)
     fetch("https://api.coingecko.com/api/v3/global")
@@ -333,12 +384,17 @@ function renderTrades() {
   if (!trades.length) { $("tradesArea").innerHTML = "<span class='loading'>无成交数据</span>"; return; }
   const minQ = getMinTradeQty(coin);
   const seen = new Set();
+  const isBuy = (t) => dataSource === "okx" ? t.buy : t.m === false;
+  const getQ = (t) => dataSource === "okx" ? t.q : parseFloat(t.q);
+  const getTs = (t) => dataSource === "okx" ? t.ts : +t.T;
+  const getId = (t) => dataSource === "okx" ? t.id : t.a;
   const large = [];
   trades.forEach(t => {
-    if (seen.has(t.a)) return;
-    seen.add(t.a);
-    const q = parseFloat(t.q);
-    if (q >= minQ) large.push({ p: +t.p, q, usd: +t.p * q, ts: +t.T, buy: t.m === false });
+    const id = getId(t);
+    if (seen.has(id)) return;
+    seen.add(id);
+    const q = getQ(t);
+    if (q >= minQ) large.push({ p: +t.p, q, usd: +t.p * q, ts: getTs(t), buy: isBuy(t) });
   });
   large.sort((a, b) => b.ts - a.ts);
 
@@ -558,6 +614,20 @@ $("intervalSel").addEventListener("change", (e) => {
   refreshTimer = setInterval(fetchAll, +e.target.value * 1000);
 });
 $("refreshBtn").addEventListener("click", fetchAll);
+$("srcBn").addEventListener("click", () => {
+  dataSource = "binance";
+  $("srcBn").classList.add("active");
+  $("srcOkx").classList.remove("active");
+  wallHistory.clear();
+  fetchAll();
+});
+$("srcOkx").addEventListener("click", () => {
+  dataSource = "okx";
+  $("srcOkx").classList.add("active");
+  $("srcBn").classList.remove("active");
+  wallHistory.clear();
+  fetchAll();
+});
 $("btLong").addEventListener("click", () => runBacktest("long"));
 $("btShort").addEventListener("click", () => runBacktest("short"));
 ["lev", "margin", "entry", "exitP", "mmr"].forEach(id =>
