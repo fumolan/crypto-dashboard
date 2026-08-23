@@ -33,6 +33,7 @@ let tickerCache = {};   // 24h行情缓存(主流币价格条用)
 let wallHistory = new Map();
 let lastWhaleBuyQ = 0, lastWhaleSellQ = 0;
 let refreshTimer = null;
+let longScore = 0, shortScore = 0;   // 当前做多/做空信号得分
 
 // ==================== OKX API ====================
 const OKX = "https://www.okx.com";
@@ -583,8 +584,8 @@ function renderSignals(tickerMap) {
   shortSigs.push({ num: "③", name: "量价配合", ok: trendData ? (trendData.direction==="down" && trendData.volume!=="light") : false, val: trendData ? trendText(trendData) : "--", thresh: "下跌+放量", prog: trendData ? (trendData.direction==="down" ? (trendData.volume!=="light"?100:50) : 20) : 0, pts: 25 });
   shortSigs.push({ num: "④", name: "近阻力", ok: distHigh < 2, val: `距高${distHigh.toFixed(1)}%`, thresh: "<2%", prog: Math.max(0, 100-distHigh/2*100), pts: 25 });
 
-  const longScore = longSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
-  const shortScore = shortSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
+  longScore = longSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
+  shortScore = shortSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
 
   // ===== 方向判定 =====
   let direction, dirColor, dirReason;
@@ -1092,16 +1093,16 @@ $("simConfirm").addEventListener("click", () => {
 function checkSimTrades() {
   const list = loadSim();
   const impScoreEl = $("impulseScore");
-  if (impScoreEl) impScoreEl.textContent = getCurrentSignalScore() + "/100";
+  if (impScoreEl) impScoreEl.textContent = `多${longScore} / 空${shortScore}`;
   if (!list.length) { renderSimActive(null); renderSimHistory(list); return; }
   let changed = false;
 
   list.forEach(t => {
     if (t.coin !== coin || !price) return;
 
-    // 等待中: 检查信号是否触发
+    // 等待中: 检查对应方向的信号是否触发
     if (t.status === "waiting") {
-      const score = getCurrentSignalScore();
+      const score = getCurrentSignalScore(t.direction);
       if (score >= 50) {
         const isLong = t.direction === "long";
         const imr = 1 / t.leverage;
@@ -1174,10 +1175,9 @@ function checkSimTrades() {
   renderSimHistory(list);
 }
 
-function getCurrentSignalScore() {
-  const el = $("signalScore");
-  const m = el.textContent.match(/(\d+)/);
-  return m ? parseInt(m[1]) : 0;
+function getCurrentSignalScore(direction) {
+  if (direction === "short") return shortScore;
+  return longScore;
 }
 
 function renderSimActive(trades) {
@@ -1196,7 +1196,7 @@ function renderOneActive(t) {
       <div class="sa-row"><span class="l">类型</span><span class="v">${t.tradeType === "impulse" ? "🔥 冲动" : "📊 策略"}</span></div>
       <div class="sa-row"><span class="l">方向</span><span class="v">${isLong ? "📈 做多" : "📉 做空"} ${t.sym}</span></div>
       <div class="sa-row"><span class="l">保证金</span><span class="v">$${t.margin} × ${t.leverage}x = $${(t.margin * t.leverage).toLocaleString()}</span></div>
-      <div class="sa-row"><span class="l">当前得分</span><span class="v">${getCurrentSignalScore()}/100</span></div>`;
+      <div class="sa-row"><span class="l">当前得分</span><span class="v">多${longScore} / 空${shortScore} (需${t.direction === "long" ? "多" : "空"}≥50)</span></div>`;
   }
 
   const typeTag = t.tradeType === "impulse" ? "🔥冲动" : "📊策略";
@@ -1229,7 +1229,7 @@ function openImpulse(dir) {
   const list = loadSim();
   const isLong = dir === "long";
   const imr = 1 / lev, mmr = 0.005;
-  const score = getCurrentSignalScore();
+  const score = getCurrentSignalScore(dir);
   list.push({
     id: Date.now(),
     tradeType: "impulse",       // 冲动交易
