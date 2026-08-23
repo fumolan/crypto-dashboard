@@ -548,88 +548,98 @@ function drawMCCurve(curve, ref) {
 
 // ==================== 信号共振 ====================
 function renderSignals(tickerMap) {
-  const signals = [];
   const kl = klines1h[coin];
+  const longSigs = [], shortSigs = [];
 
-  // ① 买盘主导: 主动买占比
-  let takerOK = false, takerVal = "--", takerProg = 0;
+  // ===== 公用数据 =====
+  let ratio = 0.5, trendData = null, minLow = 0, maxHigh = 0, distLow = 99, distHigh = 99;
   if (kl && kl.length >= 24) {
     const done = kl.slice(0, -1);
     let buy = 0, totalV = 0;
     done.forEach(k => { buy += +k[10]; totalV += +k[7]; });
-    const ratio = totalV > 0 ? buy / totalV : 0.5;
-    takerVal = `${(ratio * 100).toFixed(1)}%`;
-    takerOK = ratio > 0.55;
-    takerProg = Math.min(100, ratio / 0.55 * 100);
-  }
-  signals.push({ num: "①", name: "买盘主导", ok: takerOK, val: takerVal, thresh: ">55%", prog: takerProg, pts: 25 });
-
-  // ② 鲸鱼方向: 买入大单 > 卖出×1.2
-  const hasWhale = lastWhaleBuyQ > 0 || lastWhaleSellQ > 0;
-  const wRatio = lastWhaleSellQ > 0 ? lastWhaleBuyQ / lastWhaleSellQ : (lastWhaleBuyQ > 0 ? 99 : 0);
-  const whaleOK = hasWhale && wRatio > 1.2;
-  const whaleVal = hasWhale ? `买/卖=${wRatio.toFixed(2)}` : "无大单数据";
-  const whaleProg = hasWhale ? Math.min(100, wRatio / 1.2 * 100) : 0;
-  signals.push({ num: "②", name: "鲸鱼方向", ok: whaleOK, val: whaleVal, thresh: "买>卖×1.2", prog: whaleProg, pts: 25 });
-
-  // ③ 量能确认: 上涨方向+非缩量
-  let volOK = false, volVal = "--", volProg = 0;
-  if (kl && kl.length >= 24) {
-    const t = calcTrend(kl.slice(0, -1));
-    if (t) {
-      volOK = t.direction === "up" && t.volume !== "light";
-      volVal = trendText(t);
-      volProg = volOK ? 100 : t.direction === "up" ? 50 : t.volume === "heavy" ? 30 : 10;
+    ratio = totalV > 0 ? buy / totalV : 0.5;
+    trendData = calcTrend(done);
+    const lows = done.map(k => +k[3]);
+    const highs = done.map(k => +k[2]);
+    minLow = Math.min(...lows);
+    maxHigh = Math.max(...highs);
+    if (price > 0) {
+      distLow = (price / minLow - 1) * 100;
+      distHigh = (maxHigh / price - 1) * 100;
     }
   }
-  signals.push({ num: "③", name: "量能确认", ok: volOK, val: volVal, thresh: "上涨+非缩量", prog: volProg, pts: 25 });
+  const hasWhale = lastWhaleBuyQ > 0 || lastWhaleSellQ > 0;
+  const wRatio = lastWhaleSellQ > 0 ? lastWhaleBuyQ / lastWhaleSellQ : (lastWhaleBuyQ > 0 ? 99 : 0);
 
-  // ④ 近支撑: 距24h低点<2%
-  let supOK = false, supVal = "--", supProg = 0;
-  if (kl && kl.length >= 24 && price > 0) {
-    const lows = kl.slice(0, -1).map(k => +k[3]);
-    const minLow = Math.min(...lows);
-    const dist = (price / minLow - 1) * 100;
-    supVal = `距低点${dist.toFixed(1)}%`;
-    supOK = dist < 2;
-    supProg = Math.max(0, Math.min(100, 100 - dist / 2 * 100));
+  // ===== 做多信号 =====
+  longSigs.push({ num: "①", name: "买盘主导", ok: ratio > 0.55, val: `${(ratio*100).toFixed(1)}%`, thresh: ">55%", prog: Math.min(100, ratio/0.55*100), pts: 25 });
+  longSigs.push({ num: "②", name: "鲸鱼做多", ok: hasWhale && wRatio > 1.2, val: hasWhale ? `买/卖=${wRatio.toFixed(2)}` : "无", thresh: ">1.2", prog: hasWhale ? Math.min(100, wRatio/1.2*100) : 0, pts: 25 });
+  longSigs.push({ num: "③", name: "量价配合", ok: trendData ? (trendData.direction==="up" && trendData.volume!=="light") : false, val: trendData ? trendText(trendData) : "--", thresh: "上涨+放量", prog: trendData ? (trendData.direction==="up" ? (trendData.volume!=="light"?100:50) : 20) : 0, pts: 25 });
+  longSigs.push({ num: "④", name: "近支撑", ok: distLow < 2, val: `距低${distLow.toFixed(1)}%`, thresh: "<2%", prog: Math.max(0, 100-distLow/2*100), pts: 25 });
+
+  // ===== 做空信号 =====
+  shortSigs.push({ num: "①", name: "卖盘主导", ok: ratio < 0.45, val: `${(ratio*100).toFixed(1)}%`, thresh: "<45%", prog: Math.min(100, (1-ratio)/0.55*100), pts: 25 });
+  shortSigs.push({ num: "②", name: "鲸鱼做空", ok: hasWhale && wRatio < 0.83, val: hasWhale ? `卖/买=${(1/wRatio).toFixed(2)}` : "无", thresh: ">1.2", prog: hasWhale ? Math.min(100, (1/wRatio)/1.2*100) : 0, pts: 25 });
+  shortSigs.push({ num: "③", name: "量价配合", ok: trendData ? (trendData.direction==="down" && trendData.volume!=="light") : false, val: trendData ? trendText(trendData) : "--", thresh: "下跌+放量", prog: trendData ? (trendData.direction==="down" ? (trendData.volume!=="light"?100:50) : 20) : 0, pts: 25 });
+  shortSigs.push({ num: "④", name: "近阻力", ok: distHigh < 2, val: `距高${distHigh.toFixed(1)}%`, thresh: "<2%", prog: Math.max(0, 100-distHigh/2*100), pts: 25 });
+
+  const longScore = longSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
+  const shortScore = shortSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
+
+  // ===== 方向判定 =====
+  let direction, dirColor, dirReason;
+  if (longScore >= 75 && longScore > shortScore + 25) {
+    direction = "📈 建议做多"; dirColor = "go";
+    dirReason = `做多${longScore}分 vs 做空${shortScore}分 → 多方信号占绝对优势`;
+  } else if (shortScore >= 75 && shortScore > longScore + 25) {
+    direction = "📉 建议做空"; dirColor = "go";
+    dirReason = `做空${shortScore}分 vs 做多${longScore}分 → 空方信号占绝对优势`;
+  } else if (longScore >= 50 && longScore > shortScore + 15) {
+    direction = "📈 偏多(观望)"; dirColor = "wait";
+    dirReason = `做多${longScore}分但未达75, 可轻仓试多或等更多确认`;
+  } else if (shortScore >= 50 && shortScore > longScore + 15) {
+    direction = "📉 偏空(观望)"; dirColor = "wait";
+    dirReason = `做空${shortScore}分但未达75, 可轻仓试空或等更多确认`;
+  } else {
+    direction = "⏸️ 方向不明"; dirColor = "no";
+    dirReason = `做多${longScore} vs 做空${shortScore} → 信号矛盾或都不足, 别动`;
   }
-  signals.push({ num: "④", name: "近支撑", ok: supOK, val: supVal, thresh: "<2%", prog: supProg, pts: 25 });
 
-  const total = signals.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
-
-  // 总得分仪表盘
+  // ===== 渲染 =====
   const scoreEl = $("signalScore");
-  scoreEl.textContent = total + "/100";
-  scoreEl.className = "sg-score " + (total >= 75 ? "high" : total >= 50 ? "mid" : "low");
+  scoreEl.innerHTML = `${longScore}<span style="font-size:14px;color:var(--muted)">多</span> vs ${shortScore}<span style="font-size:14px;color:var(--muted)">空</span>`;
+  scoreEl.className = "sg-score " + dirColor;
   const bar = $("scoreBar");
   if (bar) {
-    bar.style.width = total + "%";
-    bar.style.background = total >= 75 ? "var(--down)" : total >= 50 ? "var(--accent)" : "var(--up)";
+    bar.style.width = Math.max(longScore, shortScore) + "%";
+    bar.style.background = longScore > shortScore ? "var(--up)" : "var(--down)";
   }
 
-  // 各信号计算详情
-  $("signalList").innerHTML = signals.map(sig => {
-    const progCls = sig.ok ? "pass" : sig.prog >= 60 ? "near" : "far";
-    return `<div class="sig-calc ${sig.ok ? "passed" : "failed"}">
-      <div class="sc-head">
-        <span class="sc-num">${sig.num}</span>
-        <span class="sc-name">${sig.name}</span>
-        <span class="sc-pass ${sig.ok ? "on" : "off"}">${sig.ok ? "🟢通过" : "⚪未过"}</span>
-        <span class="sc-pts ${sig.ok ? "on" : "off"}">${sig.ok ? sig.pts : 0}/${sig.pts}</span>
-      </div>
-      <div class="sc-detail">
-        <span>当前: <span class="sc-val">${sig.val}</span></span>
-        <span>阈值: <span class="sc-thresh">${sig.thresh}</span></span>
-      </div>
-      <div class="sc-bar"><div class="sc-bar-fill ${progCls}" style="width:${Math.min(100, sig.prog)}%"></div></div>
-    </div>`;
-  }).join("");
+  const renderSigs = (sigs, label, score, color) =>
+    `<div class="sig-dir-header" style="color:${color};font-weight:700;font-size:12px;margin:4px 0">${label} ${score}/100</div>` +
+    sigs.map(sig => {
+      const progCls = sig.ok ? "pass" : sig.prog >= 60 ? "near" : "far";
+      return `<div class="sig-calc ${sig.ok ? "passed" : "failed"}">
+        <div class="sc-head">
+          <span class="sc-num">${sig.num}</span>
+          <span class="sc-name">${sig.name}</span>
+          <span class="sc-pass ${sig.ok ? "on" : "off"}">${sig.ok ? "🟢" : "⚪"}</span>
+          <span class="sc-pts ${sig.ok ? "on" : "off"}">${sig.ok ? sig.pts : 0}</span>
+        </div>
+        <div class="sc-detail">
+          <span><span class="sc-val">${sig.val}</span> <span class="sc-thresh">(${sig.thresh})</span></span>
+        </div>
+        <div class="sc-bar"><div class="sc-bar-fill ${progCls}" style="width:${Math.min(100, sig.prog)}%"></div></div>
+      </div>`;
+    }).join("");
+
+  $("signalList").innerHTML =
+    renderSigs(longSigs, "📈 做多信号", longScore, "var(--up)") +
+    renderSigs(shortSigs, "📉 做空信号", shortScore, "var(--down)");
 
   const v = $("signalVerdict");
-  if (total >= 75) { v.textContent = "🟢 可交易 | 信号共振"; v.className = "verdict go"; }
-  else if (total >= 50) { v.textContent = `🟡 观望 | 需${75 - total}分`; v.className = "verdict wait"; }
-  else { v.textContent = "🔴 不交易"; v.className = "verdict no"; }
+  v.innerHTML = `${direction}<br><span style="font-size:10px;font-weight:400;color:var(--muted)">${dirReason}</span>`;
+  v.className = "verdict " + dirColor;
 }
 
 // ==================== 趋势解读 ====================
@@ -1166,7 +1176,7 @@ function checkSimTrades() {
 
 function getCurrentSignalScore() {
   const el = $("signalScore");
-  const m = el.textContent.match(/(\d+)\/100/);
+  const m = el.textContent.match(/(\d+)/);
   return m ? parseInt(m[1]) : 0;
 }
 
