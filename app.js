@@ -27,6 +27,25 @@ const META = {
   BCHUSDT: { sym: "BCH", name: "比特现金" }, ZROUSDT: { sym: "ZRO", name: "zkSync" },
   HBARUSDT: { sym: "HBAR", name: "" }, POLUSDT: { sym: "POL", name: "Polygon" },
 };
+// ===== 币种性格分档: 不同档位用不同的信号权重/阈值/止盈止损 =====
+// whale=鲸鱼方向权重 flow=买卖盘权重 trend=量价配合权重 sr=近支撑权重 (合计100)
+// buyTh=买盘主导阈值 whaleTh=鲸鱼买卖比阈值 srDist=近支撑距离% tp/sl=止盈止损
+const COIN_PROFILES = {
+  major:    { label: "主流",   whale: 15, flow: 30, trend: 25, sr: 30, buyTh: 0.55, whaleTh: 1.25, srDist: 1.5, tp: 0.02,  sl: 0.01 },
+  alt:      { label: "山寨",   whale: 25, flow: 25, trend: 25, sr: 25, buyTh: 0.55, whaleTh: 1.20, srDist: 2.0, tp: 0.03,  sl: 0.015 },
+  volatile: { label: "高波动", whale: 40, flow: 20, trend: 15, sr: 25, buyTh: 0.52, whaleTh: 1.30, srDist: 3.0, tp: 0.05,  sl: 0.02 },
+};
+const COIN_CLASS = {
+  BTCUSDT: "major", ETHUSDT: "major", BNBUSDT: "major",
+  SOLUSDT: "alt", XRPUSDT: "alt", ADAUSDT: "alt", TRXUSDT: "alt", AVAXUSDT: "alt",
+  LINKUSDT: "alt", NEARUSDT: "alt", UNIUSDT: "alt", AAVEUSDT: "alt", LTCUSDT: "alt",
+  BCHUSDT: "alt", XLMUSDT: "alt", HBARUSDT: "alt", SUIUSDT: "alt",
+  DOGEUSDT: "volatile", PEPEUSDT: "volatile", TRUMPUSDT: "volatile", PUMPUSDT: "volatile",
+  ENAUSDT: "volatile", WLDUSDT: "volatile", TAOUSDT: "volatile", ONDOUSDT: "volatile",
+  XPLUSDT: "volatile", ZROUSDT: "volatile", REUSDT: "volatile", POLUSDT: "volatile",
+  ZECUSDT: "volatile",
+};
+const coinProfile = (s) => COIN_PROFILES[COIN_CLASS[s] || "alt"];
 // 大盘指数权重(估算市值占比, 仅用于相对形态, 归一化后使用)
 const MC_WEIGHTS = { BTCUSDT: 0.58, ETHUSDT: 0.12, BNBUSDT: 0.018, SOLUSDT: 0.03,
   XRPUSDT: 0.025, DOGEUSDT: 0.012, ADAUSDT: 0.008, TRXUSDT: 0.007, ZECUSDT: 0.0022,
@@ -619,9 +638,10 @@ function drawMCCurve(curve, ref) {
 }
 
 // ==================== 信号共振 ====================
-// ==================== 信号计算(纯函数, 任意币种可用) ====================
+// ==================== 信号计算(纯函数, 任意币种可用, 按币种性格分档) ====================
 // tr: 成交列表(币安原始或OKX归一格式皆可); 返回该币的多/空信号与得分
 function computeCoinSignals(sym, tr) {
+  const pf = coinProfile(sym);   // 该币的策略档位(权重/阈值/止盈止损)
   const kl = klines1h[sym];
   const px = priceOf(sym) || (kl && kl.length ? +kl[kl.length - 1][4] : 0);
   const longSigs = [], shortSigs = [];
@@ -652,27 +672,28 @@ function computeCoinSignals(sym, tr) {
   const hasWhale = wBuy > 0 || wSell > 0;
   const wRatio = wSell > 0 ? wBuy / wSell : (wBuy > 0 ? 99 : 0);
 
-  // ===== 做多信号 =====
-  longSigs.push({ num: "①", name: "买盘主导", ok: ratio > 0.55, val: `${(ratio*100).toFixed(1)}%`, thresh: ">55%", prog: Math.min(100, ratio/0.55*100), pts: 25 });
-  longSigs.push({ num: "②", name: "鲸鱼做多", ok: hasWhale && wRatio > 1.2, val: hasWhale ? `买/卖=${wRatio.toFixed(2)}` : "无", thresh: ">1.2", prog: hasWhale ? Math.min(100, wRatio/1.2*100) : 0, pts: 25 });
-  longSigs.push({ num: "③", name: "量价配合", ok: trendData ? (trendData.direction==="up" && trendData.volume!=="light") : false, val: trendData ? trendText(trendData) : "--", thresh: "上涨+放量", prog: trendData ? (trendData.direction==="up" ? (trendData.volume!=="light"?100:50) : 20) : 0, pts: 25 });
-  longSigs.push({ num: "④", name: "近支撑", ok: distLow < 2, val: `距低${distLow.toFixed(1)}%`, thresh: "<2%", prog: Math.max(0, 100-distLow/2*100), pts: 25 });
+  // ===== 做多信号(权重/阈值取自该币档位) =====
+  longSigs.push({ num: "①", name: "买盘主导", ok: ratio > pf.buyTh, val: `${(ratio*100).toFixed(1)}%`, thresh: `>${(pf.buyTh*100).toFixed(0)}%`, prog: Math.min(100, ratio/pf.buyTh*100), pts: pf.flow });
+  longSigs.push({ num: "②", name: "鲸鱼做多", ok: hasWhale && wRatio > pf.whaleTh, val: hasWhale ? `买/卖=${wRatio.toFixed(2)}` : "无", thresh: `>${pf.whaleTh}`, prog: hasWhale ? Math.min(100, wRatio/pf.whaleTh*100) : 0, pts: pf.whale });
+  longSigs.push({ num: "③", name: "量价配合", ok: trendData ? (trendData.direction==="up" && trendData.volume!=="light") : false, val: trendData ? trendText(trendData) : "--", thresh: "上涨+放量", prog: trendData ? (trendData.direction==="up" ? (trendData.volume!=="light"?100:50) : 20) : 0, pts: pf.trend });
+  longSigs.push({ num: "④", name: "近支撑", ok: distLow < pf.srDist, val: `距低${distLow.toFixed(1)}%`, thresh: `<${pf.srDist}%`, prog: Math.max(0, 100-distLow/pf.srDist*100), pts: pf.sr });
 
   // ===== 做空信号 =====
-  shortSigs.push({ num: "①", name: "卖盘主导", ok: ratio < 0.45, val: `${(ratio*100).toFixed(1)}%`, thresh: "<45%", prog: Math.min(100, (1-ratio)/0.55*100), pts: 25 });
-  shortSigs.push({ num: "②", name: "鲸鱼做空", ok: hasWhale && wRatio < 0.83, val: hasWhale ? `卖/买=${(1/wRatio).toFixed(2)}` : "无", thresh: ">1.2", prog: hasWhale ? Math.min(100, (1/wRatio)/1.2*100) : 0, pts: 25 });
-  shortSigs.push({ num: "③", name: "量价配合", ok: trendData ? (trendData.direction==="down" && trendData.volume!=="light") : false, val: trendData ? trendText(trendData) : "--", thresh: "下跌+放量", prog: trendData ? (trendData.direction==="down" ? (trendData.volume!=="light"?100:50) : 20) : 0, pts: 25 });
-  shortSigs.push({ num: "④", name: "近阻力", ok: distHigh < 2, val: `距高${distHigh.toFixed(1)}%`, thresh: "<2%", prog: Math.max(0, 100-distHigh/2*100), pts: 25 });
+  const sellTh = 1 - pf.buyTh;
+  shortSigs.push({ num: "①", name: "卖盘主导", ok: ratio < sellTh, val: `${(ratio*100).toFixed(1)}%`, thresh: `<${(sellTh*100).toFixed(0)}%`, prog: Math.min(100, (1-ratio)/(1-sellTh)*100), pts: pf.flow });
+  shortSigs.push({ num: "②", name: "鲸鱼做空", ok: hasWhale && wRatio < 1/pf.whaleTh, val: hasWhale ? `卖/买=${(1/wRatio).toFixed(2)}` : "无", thresh: `>${pf.whaleTh}`, prog: hasWhale ? Math.min(100, (1/wRatio)/pf.whaleTh*100) : 0, pts: pf.whale });
+  shortSigs.push({ num: "③", name: "量价配合", ok: trendData ? (trendData.direction==="down" && trendData.volume!=="light") : false, val: trendData ? trendText(trendData) : "--", thresh: "下跌+放量", prog: trendData ? (trendData.direction==="down" ? (trendData.volume!=="light"?100:50) : 20) : 0, pts: pf.trend });
+  shortSigs.push({ num: "④", name: "近阻力", ok: distHigh < pf.srDist, val: `距高${distHigh.toFixed(1)}%`, thresh: `<${pf.srDist}%`, prog: Math.max(0, 100-distHigh/pf.srDist*100), pts: pf.sr });
 
   return {
-    longSigs, shortSigs,
+    longSigs, shortSigs, pf,
     longScore: longSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0),
     shortScore: shortSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0),
   };
 }
 
 function renderSignals(tickerMap) {
-  const { longSigs, shortSigs } = computeCoinSignals(coin, trades);
+  const { longSigs, shortSigs, pf } = computeCoinSignals(coin, trades);
   longScore = longSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
   shortScore = shortSigs.reduce((s, sig) => s + (sig.ok ? sig.pts : 0), 0);
 
@@ -699,6 +720,8 @@ function renderSignals(tickerMap) {
   const scoreEl = $("signalScore");
   scoreEl.innerHTML = `${longScore}<span style="font-size:14px;color:var(--muted)">多</span> vs ${shortScore}<span style="font-size:14px;color:var(--muted)">空</span>`;
   scoreEl.className = "sg-score " + dirColor;
+  const badge = $("signalProfile");
+  if (badge) badge.innerHTML = `${META[coin].sym} · <b>${pf.label}档</b> · 止盈+${(pf.tp*100).toFixed(1)}%/止损-${(pf.sl*100).toFixed(1)}% · 权重 鲸${pf.whale}/盘${pf.flow}/势${pf.trend}/撑${pf.sr}`;
   const bar = $("scoreBar");
   if (bar) {
     bar.style.width = Math.max(longScore, shortScore) + "%";
@@ -782,6 +805,7 @@ function renderScanResults(results) {
     const hits = hitTxt.filter(x => x.ok).map(x => x.name).join(" · ");
     return `<div class="scan-row${m ? (m.strong ? " hit strong" : " hit") : ""}" data-sym="${r.s}">
       <span class="sr-sym">${META[r.s].sym}</span>
+      <span class="sr-tag ${coinProfile(r.s).label}">${coinProfile(r.s).label}</span>
       <span class="sr-verdict" style="color:${m ? m.color : "var(--muted)"}">${m ? m.tag : "— 不开仓"}</span>
       <span class="sr-price">${px ? fmtP(px) : "--"}</span>
       <span class="sr-score">多${r.longScore}/空${r.shortScore}</span>
@@ -1028,7 +1052,8 @@ function updateCalc() {
   if (entry <= 0) return;
   const exitP = +$("exitP").value || entry;
   const imr = 1 / lev;
-  const TP = 0.02, SL = 0.01;
+  const pf = coinProfile(coin);
+  const TP = pf.tp, SL = pf.sl;
 
   // 爆仓价
   const lpL = entry * (1 - imr + mmr);
@@ -1058,9 +1083,9 @@ function updateCalc() {
   const impPreview = $("impulsePreview");
   if (impPreview && price > 0) {
     impPreview.innerHTML = `
-      开仓 <b>${fmtP(entry)}</b> (现价) |
-      做多: 止盈 <span class="tp">${fmtP(entry * 1.02)}</span> / 止损 <span class="sl">${fmtP(entry * 0.99)}</span><br>
-      做空: 止盈 <span class="tp">${fmtP(entry * 0.98)}</span> / 止损 <span class="sl">${fmtP(entry * 1.01)}</span> |
+      开仓 <b>${fmtP(entry)}</b> (现价) · <b>${pf.label}档</b><br>
+      做多: 止盈 <span class="tp">${fmtP(entry * (1 + TP))}</span> / 止损 <span class="sl">${fmtP(entry * (1 - SL))}</span><br>
+      做空: 止盈 <span class="tp">${fmtP(entry * (1 - TP))}</span> / 止损 <span class="sl">${fmtP(entry * (1 + SL))}</span> |
       仓位 <b>${fmtU(margin * lev)}</b> · 止盈赚 <span class="tp">+$${(margin * lev * TP).toFixed(2)}</span>`;
   }
 }
@@ -1076,7 +1101,8 @@ async function runBacktest(dir) {
   el.innerHTML = "<span class='loading'>回测中…</span>";
   try {
     const kl = await apiGet(`/api/v3/klines?symbol=${coin}&interval=1h&limit=500`);
-    const TP = 0.02, SL = 0.01, MAX = 24;
+    const pf = coinProfile(coin);
+    const TP = pf.tp, SL = pf.sl, MAX = 24;
     let trades = 0, wins = 0, losses = 0, totalPL = 0;
     let open = null;
     let totalHoldBars = 0;
@@ -1140,10 +1166,10 @@ async function runBacktest(dir) {
       <div class="r"><span>回测周期</span><b>${spanDays}天</b></div>
       <div class="r"><span>平均持仓</span><b>${avgHoldStr}</b></div>
       <div class="bt-strategy">
-        <b>📋 策略参数</b><br>
+        <b>📋 策略参数 (${pf.label}档)</b><br>
         币种: ${META[coin].sym}/USDT | 时间框架: 1小时 | 方向: ${isLong ? "做多" : "做空"}<br>
         入场: ≥3信号共振 ${isLong ? "(买占比>55% + 近支撑<1.5% + 放量>1.2x + ≥4阳线)" : "(卖占比>55% + 近阻力<1.5% + 放量>1.2x + ≥4阴线)"}<br>
-        止盈: <b style="color:var(--down)">+2%</b> | 止损: <b style="color:var(--up)">-1%</b> | 超时平仓: 24小时
+        止盈: <b style="color:var(--down)">+${(TP*100).toFixed(1)}%</b> | 止损: <b style="color:var(--up)">-${(SL*100).toFixed(1)}%</b> | 超时平仓: 24小时
       </div>`;
 
     // 逐笔交易记录(最近10笔)
@@ -1173,7 +1199,7 @@ async function runBacktest(dir) {
 
 // ==================== 模拟交易: 策略验证系统 ====================
 const SIM_KEY = "crypto_sim_trades_v1";
-const SIM_TP = 0.02, SIM_SL = 0.01;    // 止盈2% 止损1%
+const SIM_TP = 0.02, SIM_SL = 0.01;    // 旧交易兜底(新仓按币种档位存tpPct/slPct)
 
 let simDirection = "long";   // 当前要验证的方向
 
@@ -1222,12 +1248,13 @@ function updateSimPreview() {
   const liqShort = price * (1 + imr - mmr);
   const isLong = simDirection === "long";
   const liq = isLong ? liqLong : liqShort;
-  const tp = isLong ? price * (1 + SIM_TP) : price * (1 - SIM_TP);
-  const sl = isLong ? price * (1 - SIM_SL) : price * (1 + SIM_SL);
-  const tpProfit = pos * SIM_TP;
-  const slLoss = pos * SIM_SL;
+  const pf = coinProfile(coin);
+  const tp = isLong ? price * (1 + pf.tp) : price * (1 - pf.tp);
+  const sl = isLong ? price * (1 - pf.sl) : price * (1 + pf.sl);
+  const tpProfit = pos * pf.tp;
+  const slLoss = pos * pf.sl;
   $("simPreview").innerHTML = `
-    <b>${isLong ? "📈 做多" : "📉 做空"} ${META[coin].sym}</b> | 仓位 <b>$${pos.toLocaleString()}</b> (${qty < 1 ? qty.toFixed(4) : qty.toFixed(2)} ${META[coin].sym})<br>
+    <b>${isLong ? "📈 做多" : "📉 做空"} ${META[coin].sym}</b> · <b>${pf.label}档</b> | 仓位 <b>$${pos.toLocaleString()}</b> (${qty < 1 ? qty.toFixed(4) : qty.toFixed(2)} ${META[coin].sym})<br>
     止盈: <b style="color:var(--down)">${fmtP(tp)}</b> (+$${tpProfit.toFixed(2)}) |
     止损: <b style="color:var(--up)">${fmtP(sl)}</b> (-$${slLoss.toFixed(2)})<br>
     爆仓价: <b style="color:#ff4444">${fmtP(liq)}</b> (亏光保证金$${m})`;
@@ -1259,8 +1286,9 @@ $("simConfirm").addEventListener("click", () => {
     scoreAtOpen: getCurrentSignalScore(simDirection),
     status: "open",              // 立即开仓
     entryPrice: price, entryTime: Date.now(),
-    tpPrice: isLong ? price * 1.02 : price * 0.98,
-    slPrice: isLong ? price * 0.99 : price * 1.01,
+    tpPct: coinProfile(coin).tp, slPct: coinProfile(coin).sl,
+    tpPrice: isLong ? price * (1 + coinProfile(coin).tp) : price * (1 - coinProfile(coin).tp),
+    slPrice: isLong ? price * (1 - coinProfile(coin).sl) : price * (1 + coinProfile(coin).sl),
     liqPrice: isLong ? price * (1 - imr + mmr) : price * (1 + imr - mmr),
     exitPrice: null, exitTime: null,
     pnl: null, roi: null,
@@ -1290,10 +1318,12 @@ function checkSimTrades() {
         const isLong = t.direction === "long";
         const imr = 1 / t.leverage;
         const mmr = 0.005;
+        const wpf = coinProfile(t.coin);
         t.entryPrice = price;
         t.entryTime = Date.now();
-        t.tpPrice = isLong ? price * (1 + SIM_TP) : price * (1 - SIM_TP);
-        t.slPrice = isLong ? price * (1 - SIM_SL) : price * (1 + SIM_SL);
+        t.tpPct = wpf.tp; t.slPct = wpf.sl;
+        t.tpPrice = isLong ? price * (1 + wpf.tp) : price * (1 - wpf.tp);
+        t.slPrice = isLong ? price * (1 - wpf.sl) : price * (1 + wpf.sl);
         t.liqPrice = isLong ? price * (1 - imr + mmr) : price * (1 + imr - mmr);
         t.status = "open";
         changed = true;
@@ -1301,7 +1331,8 @@ function checkSimTrades() {
       return;
     }
 
-    // 持仓中: 检查止盈/止损/爆仓
+    // 持仓中: 检查止盈/止损/爆仓 (止盈止损按该仓自己的比例)
+    const tpP = t.tpPct ?? SIM_TP, slP = t.slPct ?? SIM_SL;
     if (t.status === "open" && klines5m.length > 1) {
       const done = klines5m.slice(0, -1);
       const isLong = t.direction === "long";
@@ -1320,23 +1351,23 @@ function checkSimTrades() {
         // 止损
         if (isLong && l <= t.slPrice) {
           t.status = "loss"; t.exitPrice = t.slPrice;
-          t.pnl = -(t.margin * t.leverage * SIM_SL); t.roi = -SIM_SL * t.leverage * 100;
+          t.pnl = -(t.margin * t.leverage * slP); t.roi = -slP * t.leverage * 100;
           t.exitTime = +k[0]; changed = true; break;
         }
         if (!isLong && h >= t.slPrice) {
           t.status = "loss"; t.exitPrice = t.slPrice;
-          t.pnl = -(t.margin * t.leverage * SIM_SL); t.roi = -SIM_SL * t.leverage * 100;
+          t.pnl = -(t.margin * t.leverage * slP); t.roi = -slP * t.leverage * 100;
           t.exitTime = +k[0]; changed = true; break;
         }
         // 止盈
         if (isLong && h >= t.tpPrice) {
           t.status = "win"; t.exitPrice = t.tpPrice;
-          t.pnl = t.margin * t.leverage * SIM_TP; t.roi = SIM_TP * t.leverage * 100;
+          t.pnl = t.margin * t.leverage * tpP; t.roi = tpP * t.leverage * 100;
           t.exitTime = +k[0]; changed = true; break;
         }
         if (!isLong && l <= t.tpPrice) {
           t.status = "win"; t.exitPrice = t.tpPrice;
-          t.pnl = t.margin * t.leverage * SIM_TP; t.roi = SIM_TP * t.leverage * 100;
+          t.pnl = t.margin * t.leverage * tpP; t.roi = tpP * t.leverage * 100;
           t.exitTime = +k[0]; changed = true; break;
         }
       }
@@ -1491,8 +1522,9 @@ function openImpulse(dir) {
     scoreAtOpen: score,          // 开仓时的信号得分
     status: "open",              // 立即开仓
     entryPrice: price, entryTime: Date.now(),
-    tpPrice: isLong ? price * 1.02 : price * 0.98,
-    slPrice: isLong ? price * 0.99 : price * 1.01,
+    tpPct: coinProfile(coin).tp, slPct: coinProfile(coin).sl,
+    tpPrice: isLong ? price * (1 + coinProfile(coin).tp) : price * (1 - coinProfile(coin).tp),
+    slPrice: isLong ? price * (1 - coinProfile(coin).sl) : price * (1 + coinProfile(coin).sl),
     liqPrice: isLong ? price * (1 - imr + mmr) : price * (1 + imr - mmr),
     exitPrice: null, exitTime: null, pnl: null, roi: null,
   });
