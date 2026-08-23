@@ -1219,8 +1219,9 @@ function renderOneActive(t) {
 
 // ==================== 冲动开仓: 不等信号立即成交 ====================
 function openImpulse(dir) {
-  const m = +$("margin").value || +$("simMargin").value || 100;
-  const lev = Math.min(125, Math.max(1, +$("lev").value || +$("simLev").value || 10));
+  // 直接读取计算器卡片的保证金和杠杆(不再有歧义的回退逻辑)
+  const m = Math.max(1, +$("margin").value || 100);
+  const lev = Math.min(125, Math.max(1, +$("lev").value || 10));
   if (price <= 0) return;
   const list = loadSim();
   // 冲动仓只检查冲动仓(策略仓可以并存)
