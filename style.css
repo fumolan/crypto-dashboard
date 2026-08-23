@@ -848,3 +848,13 @@ footer {
 .xray-trades, .xray-walls { max-height: 280px; overflow-y: auto; font-size: 11.5px; }
 
 .trend-calc-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+.sh-detail-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.sh-detail-btn:hover { border-color: var(--accent); }

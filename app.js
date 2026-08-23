@@ -1348,8 +1348,55 @@ function renderSimHistory(list) {
         <span class="sh-detail">${fmtP(t.entryPrice)}→${fmtP(t.exitPrice)} ${t.margin}U×${t.leverage}x${t.scoreAtOpen !== undefined ? ` (${t.scoreAtOpen}分)` : ""}</span>
         <span class="sh-result ${pos ? "pos" : "neg"}" style="color:${pos ? "var(--down)" : "var(--up)"}">${resMap[t.status]}</span>
         <span class="sh-pnl ${pos ? "pos" : "neg"}">${pos ? "+" : ""}$${t.pnl.toFixed(2)}</span>
+        <button class="sh-detail-btn" onclick="showTradeDetail(${t.id})">📋</button>
       </div>`;
     }).join("");
+}
+
+function showTradeDetail(id) {
+  const list = loadSim();
+  const t = list.find(x => x.id === id);
+  if (!t) return;
+  const isLong = t.direction === "long";
+  const pos = t.pnl > 0;
+  const typeLabel = t.tradeType === "impulse" ? "🔥 冲动开仓" : "📊 策略开仓";
+  const resMap = { win: "✅ 止盈出场", loss: "❌ 止损出场", liquidated: "💥 爆仓（保证金归零）", timeout: "⏰ 超时平仓" };
+  const fmtDT = (ts) => ts ? new Date(ts).toLocaleString("zh-CN",
+    { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "--";
+  const holdMin = t.entryTime && t.exitTime ? Math.round((t.exitTime - t.entryTime) / 60000) : 0;
+  const holdStr = holdMin > 60 ? `${Math.floor(holdMin / 60)}小时${holdMin % 60}分` : `${holdMin}分钟`;
+  const qty = t.margin * t.leverage / t.entryPrice;
+  const priceChg = isLong ? (t.exitPrice / t.entryPrice - 1) : (1 - t.exitPrice / t.entryPrice);
+
+  $("tdTitle").textContent = `${t.sym} ${isLong ? "做多" : "做空"} 详情`;
+  $("tdBody").innerHTML = `
+    <div style="text-align:center;padding:12px;border-radius:8px;margin-bottom:10px;background:${pos ? "rgba(36,178,140,0.1)" : "rgba(229,69,69,0.1)"}">
+      <div style="font-size:13px;color:var(--muted)">${resMap[t.status]}</div>
+      <div style="font-size:28px;font-weight:800;color:${pos ? "var(--down)" : "var(--up)"}">${pos ? "+" : ""}$${t.pnl.toFixed(2)}</div>
+      <div style="font-size:12px;color:${pos ? "var(--down)" : "var(--up)"}">${t.roi >= 0 ? "+" : ""}${t.roi.toFixed(1)}% ROI</div>
+    </div>
+    <div class="con-row"><span class="con-label">交易类型</span><span class="con-val" style="color:${t.tradeType === "impulse" ? "var(--up)" : "var(--accent)"}">${typeLabel}</span></div>
+    <div class="con-row"><span class="con-label">开仓时信号得分</span><span class="con-val">${t.scoreAtOpen !== undefined ? t.scoreAtOpen + "/100" : "--"}</span></div>
+    <div style="border-top:1px dashed var(--border);margin:6px 0"></div>
+    <div class="con-row"><span class="con-label">入场时间</span><span class="con-val">${fmtDT(t.entryTime)}</span></div>
+    <div class="con-row"><span class="con-label">入场价格</span><span class="con-val">${fmtP(t.entryPrice)}</span></div>
+    <div class="con-row"><span class="con-label">出场时间</span><span class="con-val">${fmtDT(t.exitTime)}</span></div>
+    <div class="con-row"><span class="con-label">出场价格</span><span class="con-val">${fmtP(t.exitPrice)}</span></div>
+    <div class="con-row"><span class="con-label">持仓时长</span><span class="con-val">${holdStr}</span></div>
+    <div style="border-top:1px dashed var(--border);margin:6px 0"></div>
+    <div class="con-row"><span class="con-label">止盈价</span><span class="con-val" style="color:var(--down)">${fmtP(t.tpPrice)}</span></div>
+    <div class="con-row"><span class="con-label">止损价</span><span class="con-val" style="color:var(--up)">${fmtP(t.slPrice)}</span></div>
+    <div class="con-row"><span class="con-label">爆仓价</span><span class="con-val" style="color:#ff4444">${fmtP(t.liqPrice)} ${t.status === "liquidated" ? "💀" : ""}</span></div>
+    <div style="border-top:1px dashed var(--border);margin:6px 0"></div>
+    <div class="con-row"><span class="con-label">保证金</span><span class="con-val">$${t.margin}</span></div>
+    <div class="con-row"><span class="con-label">杠杆</span><span class="con-val">${t.leverage}x</span></div>
+    <div class="con-row"><span class="con-label">仓位</span><span class="con-val">$${(t.margin * t.leverage).toLocaleString()} (${qty < 1 ? qty.toFixed(4) : qty.toFixed(2)} ${t.sym})</span></div>
+    <div class="con-row"><span class="con-label">价格变动</span><span class="con-val" style="color:${priceChg >= 0 ? "var(--down)" : "var(--up)"}">${(priceChg * 100).toFixed(2)}%</span></div>
+    ${t.tradeType === "impulse" && t.scoreAtOpen !== undefined && t.scoreAtOpen < 50 && t.pnl < 0 ? `
+    <div class="xray-insight" style="margin-top:10px">
+      ⚠️ <b>冲动的代价</b>：开仓时信号得分仅 ${t.scoreAtOpen} 分（低于50分阈值）。如果等信号达标再开仓，可能避免这笔 $${Math.abs(t.pnl).toFixed(2)} 的亏损。
+    </div>` : ""}`;
+  $("tradeDetailOverlay").classList.remove("hidden");
 }
 
 // ==================== 事件 & 初始化 ====================

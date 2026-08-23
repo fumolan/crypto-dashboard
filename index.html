@@ -189,6 +189,17 @@
     </div>
   </div>
 
+  <!-- 交易详情弹框 -->
+  <div class="xray-overlay hidden" id="tradeDetailOverlay">
+    <div class="xray-modal" style="max-width:480px">
+      <div class="xray-header">
+        <span class="xray-title" id="tdTitle">交易详情</span>
+        <button class="xray-close" onclick="document.getElementById('tradeDetailOverlay').classList.add('hidden')">&times;</button>
+      </div>
+      <div class="xray-body" id="tdBody"></div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
