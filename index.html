@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crypto Dashboard · 加密货币仪表盘</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 顶栏: 全局控制 -->
+  <header class="topbar">
+    <div class="logo">🎯 Crypto Dashboard</div>
+    <div class="controls">
+      <select id="coinSel" title="选择币种">
+        <option value="BTCUSDT">BTC 比特币</option>
+        <option value="ETHUSDT">ETH 以太坊</option>
+        <option value="BNBUSDT">BNB</option>
+        <option value="SOLUSDT">SOL</option>
+        <option value="XRPUSDT">XRP 瑞波币</option>
+        <option value="DOGEUSDT">DOGE 狗狗币</option>
+        <option value="ADAUSDT">ADA 艾达币</option>
+        <option value="TRXUSDT">TRX 波场</option>
+      </select>
+      <select id="intervalSel" title="刷新间隔">
+        <option value="10">10秒</option>
+        <option value="30" selected>30秒</option>
+        <option value="60">60秒</option>
+      </select>
+      <button id="refreshBtn" title="立即刷新">🔄</button>
+    </div>
+    <div class="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="lastUpdate">--:--:--</span>
+    </div>
+  </header>
+
+  <!-- 第一行: 三个图表 -->
+  <div class="grid charts-row">
+    <div class="card chart-card">
+      <div class="card-title">📈 价格走势 <span class="sub">4小时 · 5分钟</span></div>
+      <div id="priceChart" class="chart-area"><span class="loading">加载中…</span></div>
+      <div class="chart-info" id="priceInfo"></div>
+    </div>
+    <div class="card chart-card">
+      <div class="card-title">📊 成交量 · 主动买占比 <span class="sub">4小时</span></div>
+      <div id="volChart" class="chart-area"><span class="loading">加载中…</span></div>
+      <div class="chart-info" id="volInfo"></div>
+    </div>
+    <div class="card chart-card">
+      <div class="card-title">🌐 总市值 <span class="sub">4小时趋势</span></div>
+      <div id="mcChart" class="chart-area"><span class="loading">加载中…</span></div>
+      <div class="chart-info" id="mcInfo"></div>
+    </div>
+  </div>
+
+  <!-- 第二行: 信号 + 趋势 + 计算器 -->
+  <div class="grid analysis-row">
+    <div class="card signal-card">
+      <div class="card-title">🎯 信号共振 <span id="signalScore" class="score">--</span></div>
+      <div id="signalList" class="signal-list"><span class="loading">等待数据…</span></div>
+      <div id="signalVerdict" class="verdict">--</div>
+      <div class="bt-btns">
+        <button id="btLong" class="bt-btn long">📈 回测做多</button>
+        <button id="btShort" class="bt-btn short">📉 回测做空</button>
+      </div>
+      <div id="btResult" class="bt-result hidden"></div>
+    </div>
+    <div class="card trend-card">
+      <div class="card-title">📊 趋势解读 <span class="sub">各币种量价分析</span></div>
+      <div id="trendList" class="trend-list"><span class="loading">加载中…</span></div>
+    </div>
+    <div class="card calc-card">
+      <div class="card-title">🧮 爆仓价 & 利润计算器</div>
+      <div class="calc-grid">
+        <label>杠杆<input id="lev" type="number" value="10" min="1" max="125">x</label>
+        <label>保证金<input id="margin" type="number" value="100">U</label>
+        <label>开仓价<input id="entry" type="number" step="any" placeholder="现价">USDT</label>
+        <label>平仓价<input id="exitP" type="number" step="any" placeholder="可选">USDT</label>
+        <label>维持保证金率
+          <select id="mmr"><option value="0.004">0.4%</option><option value="0.005" selected>0.5%</option><option value="0.01">1%</option></select>
+        </label>
+      </div>
+      <div class="calc-results">
+        <div class="cr"><label>做多爆仓</label><b id="liqLong">--</b></div>
+        <div class="cr"><label>做多利润</label><b id="pnlLong">--</b></div>
+        <div class="cr"><label>做空爆仓</label><b id="liqShort">--</b></div>
+        <div class="cr"><label>做空利润</label><b id="pnlShort">--</b></div>
+        <div class="cr"><label>仓位 ≈</label><b id="posSize">--</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 第三行: 大单 + 盘口 -->
+  <div class="grid data-row">
+    <div class="card trades-card">
+      <div class="card-title">🐋 大单成交 <span class="sub">时间倒序 · 买卖分区</span> <span id="tradeSummary" class="sub"></span></div>
+      <div id="tradesArea" class="trades-area"><span class="loading">加载中…</span></div>
+    </div>
+    <div class="card walls-card">
+      <div class="card-title">🧱 盘口大墙 <span class="sub">支撑/阻力 + 行为追踪</span> <span id="wallTime" class="sub"></span></div>
+      <div id="wallsArea" class="walls-area"><span class="loading">加载中…</span></div>
+    </div>
+  </div>
+
+  <footer>
+    数据源: Binance 公开API + CoinGecko · 全部模块由全局币种选择器联动 · <span id="dataRange"></span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
