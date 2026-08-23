@@ -776,12 +776,14 @@ function renderScanResults(results) {
     const m = r.v;
     const t = tickerCache[r.s];
     const chg = t ? parseFloat(t.priceChangePercent) : 0;
+    const px = t ? parseFloat(t.lastPrice) : 0;
     const hitTxt = m ? m.dir === "long" ? r.longSigs : r.shortSigs
       : [];
     const hits = hitTxt.filter(x => x.ok).map(x => x.name).join(" · ");
     return `<div class="scan-row${m ? (m.strong ? " hit strong" : " hit") : ""}" data-sym="${r.s}">
       <span class="sr-sym">${META[r.s].sym}</span>
       <span class="sr-verdict" style="color:${m ? m.color : "var(--muted)"}">${m ? m.tag : "— 不开仓"}</span>
+      <span class="sr-price">${px ? fmtP(px) : "--"}</span>
       <span class="sr-score">多${r.longScore}/空${r.shortScore}</span>
       <span class="sr-hits">${hits}</span>
       <span class="sr-chg ${chg >= 0 ? "up" : "down"}">${chg >= 0 ? "+" : ""}${chg.toFixed(2)}%</span>

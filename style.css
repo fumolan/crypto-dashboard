@@ -425,6 +425,7 @@ body {
 .scan-row.hit.strong { border-color: rgba(229, 69, 69, 0.35); }
 .sr-sym { width: 50px; font-weight: 700; flex-shrink: 0; }
 .sr-verdict { width: 74px; font-weight: 700; flex-shrink: 0; }
+.sr-price { width: 76px; text-align: right; flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
 .sr-score { width: 88px; flex-shrink: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sr-hits { flex: 1; color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sr-chg { width: 56px; text-align: right; flex-shrink: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
