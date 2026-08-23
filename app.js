@@ -1696,7 +1696,19 @@ $("viewReportBtn").addEventListener("click", () => {
 });
 
 // ==================== 导出交易记录到文件(按币种分文件, 最新在前) ====================
-$("exportBtn").addEventListener("click", () => {
+// 优先通过本地server.py写入index.html所在文件夹; 未运行服务时回退浏览器下载
+async function saveMdFile(filename, content) {
+  try {
+    const r = await fetch("/save-md", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ filename, content }),
+    });
+    return r.ok;
+  } catch (e) { return false; }
+}
+
+$("exportBtn").addEventListener("click", async () => {
   const list = loadSim();
   if (!list.length) { alert("暂无交易记录"); return; }
   const now = new Date();
@@ -1711,8 +1723,9 @@ $("exportBtn").addEventListener("click", () => {
     byCoin[t.coin].push(t);
   });
 
-  // 每个币种下载一个文件
-  Object.entries(byCoin).forEach(([sym, trades]) => {
+  // 每个币种导出一个文件
+  const outcomes = [];
+  await Promise.all(Object.entries(byCoin).map(async ([sym, trades]) => {
     // 最新在前
     trades.sort((a, b) => (b.entryTime || b.id) - (a.entryTime || a.id));
     const closed = trades.filter(t => ["win", "loss", "liquidated", "timeout", "manual"].includes(t.status));
@@ -1748,13 +1761,27 @@ $("exportBtn").addEventListener("click", () => {
       md += `\n`;
     });
 
-    const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${trades[0].sym}_交易记录.md`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  });
+    const fname = `${trades[0].sym}_交易记录.md`;
+    const saved = await saveMdFile(fname, md);
+    outcomes.push({ fname, saved, md });
+    if (!saved) {
+      // 本地服务未运行 → 回退浏览器下载(存到浏览器下载文件夹)
+      const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = fname;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+  }));
+  // 按钮反馈: 写入文件夹 or 提示启动server.py
+  const wrote = outcomes.filter(o => o.saved).length;
+  const btn = $("exportBtn");
+  const old = btn.textContent;
+  btn.textContent = wrote
+    ? `✅ ${wrote}个md已写入文件夹`
+    : "⬇️ 已下载(运行python3 server.py可直接写文件夹)";
+  setTimeout(() => { btn.textContent = old; }, 3500);
 });
 
 // ==================== 事件 & 初始化 ====================
