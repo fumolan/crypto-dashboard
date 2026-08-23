@@ -209,6 +209,81 @@ body {
 .bt-result .good { color: var(--down); }
 .bt-result .bad { color: var(--up); }
 
+.bt-trades {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 10.5px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.bt-trade-row {
+  display: flex;
+  gap: 6px;
+  padding: 2px 0;
+  border-bottom: 1px solid rgba(42,50,66,0.2);
+  font-variant-numeric: tabular-nums;
+}
+.bt-trade-row:last-child { border-bottom: none; }
+.bt-t-time { width: 100px; color: var(--muted); }
+.bt-t-entry { width: 80px; text-align: right; }
+.bt-t-exit { width: 80px; text-align: right; }
+.bt-t-result { width: 50px; text-align: center; font-weight: 700; }
+.bt-t-result.win { color: var(--down); }
+.bt-t-result.loss { color: var(--up); }
+.bt-t-pl { width: 60px; text-align: right; font-weight: 700; }
+.bt-t-pl.win { color: var(--down); }
+.bt-t-pl.loss { color: var(--up); }
+
+.bt-strategy {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: rgba(240,185,11,0.05);
+  border: 1px dashed var(--border);
+  border-radius: 5px;
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.bt-strategy b { color: var(--accent); }
+
+/* ---------- 前向验证 ---------- */
+.forward-card { grid-column: span 1; }
+.fwd-list { max-height: 220px; overflow-y: auto; }
+.fwd-row {
+  display: grid;
+  grid-template-columns: 70px 55px 1fr 60px 55px 50px;
+  gap: 4px;
+  padding: 3px 4px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid rgba(42,50,66,0.2);
+  align-items: center;
+}
+.fwd-row:last-child { border-bottom: none; }
+.fwd-time { color: var(--muted); font-size: 10px; }
+.fwd-sym { font-weight: 700; }
+.fwd-detail { color: var(--muted); font-size: 10px; }
+.fwd-price { text-align: right; }
+.fwd-status { text-align: center; font-weight: 700; font-size: 10px; border-radius: 3px; padding: 1px 2px; }
+.fwd-status.pending { color: var(--accent); background: rgba(240,185,11,0.12); }
+.fwd-status.win { color: var(--down); background: rgba(36,178,140,0.12); }
+.fwd-status.loss { color: var(--up); background: rgba(229,69,69,0.12); }
+.fwd-status.timeout { color: var(--muted); background: rgba(122,130,153,0.12); }
+.fwd-pl { text-align: right; font-weight: 700; }
+.fwd-pl.win { color: var(--down); }
+.fwd-pl.loss { color: var(--up); }
+.fwd-note {
+  margin-top: 6px;
+  padding: 5px 8px;
+  font-size: 10px;
+  color: var(--muted);
+  border-top: 1px dashed var(--border);
+  line-height: 1.4;
+}
+
 /* ---------- 趋势解读 ---------- */
 .trend-list { display: flex; flex-direction: column; gap: 3px; }
 .trend-row {
