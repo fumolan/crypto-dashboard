@@ -778,11 +778,9 @@ function saveSim(list) {
   try { localStorage.setItem(SIM_KEY, JSON.stringify(list)); } catch (e) {}
 }
 
-// 显示"开始模拟交易"按钮(回测完成后调用)
+// 设置策略方向(回测后调用, 按钮始终可见)
 function showSimButton(dir) {
   simDirection = dir;
-  $("simStartBtn").classList.remove("hidden");
-  $("simForm").classList.add("hidden");
 }
 
 // 点击"开始模拟交易" → 显示参数表单
@@ -818,15 +816,16 @@ function updateSimPreview() {
     爆仓价: <b style="color:#ff4444">${fmtP(liq)}</b> (亏光保证金$${m})`;
 }
 
-// 确认开仓 → 创建等待信号的模拟交易
+// 确认开仓 → 创建等待信号的模拟交易(策略仓)
 $("simConfirm").addEventListener("click", () => {
   const m = +$("simMargin").value || 100;
   const lev = Math.min(125, Math.max(1, +$("simLev").value || 10));
   const list = loadSim();
-  // 同币种同方向只能有一个未完结的模拟
-  const hasActive = list.some(t => t.coin === coin && t.status !== "win" && t.status !== "loss" && t.status !== "liquidated");
-  if (hasActive) {
-    alert(`已有 ${META[coin].sym} 的未完结模拟交易，等它结束再开新的`);
+  // 策略仓和冲动仓可以并存, 但同类型只能有一个
+  const hasStrategy = list.some(t => t.coin === coin && t.tradeType !== "impulse" &&
+    (t.status === "waiting" || t.status === "open"));
+  if (hasStrategy) {
+    alert(`已有 ${META[coin].sym} 的策略仓在运行`);
     return;
   }
   list.push({
@@ -928,9 +927,9 @@ function checkSimTrades() {
   });
 
   if (changed) saveSim(list);
-  // 渲染当前币种的活跃交易和全部历史
-  const active = list.find(t => t.coin === coin && (t.status === "waiting" || t.status === "open"));
-  renderSimActive(active);
+  // 渲染当前币种的所有活跃交易(策略仓+冲动仓可并存)
+  const actives = list.filter(t => t.coin === coin && (t.status === "waiting" || t.status === "open"));
+  renderSimActive(actives);
   renderSimHistory(list);
 }
 
@@ -940,26 +939,26 @@ function getCurrentSignalScore() {
   return m ? parseInt(m[1]) : 0;
 }
 
-function renderSimActive(t) {
+function renderSimActive(trades) {
   const el = $("simActive");
-  if (!t) { el.classList.add("hidden"); return; }
+  if (!trades || !trades.length) { el.classList.add("hidden"); return; }
   el.classList.remove("hidden");
+  el.innerHTML = trades.map(t => renderOneActive(t)).join('<div style="border-top:1px dashed var(--border);margin:6px 0"></div>');
+}
+
+function renderOneActive(t) {
   const isLong = t.direction === "long";
 
   if (t.status === "waiting") {
-    el.innerHTML = `
+    return `
       <div class="sa-status waiting">⏳ 等待信号触发 (得分≥50时自动开仓)</div>
       <div class="sa-row"><span class="l">类型</span><span class="v">${t.tradeType === "impulse" ? "🔥 冲动" : "📊 策略"}</span></div>
       <div class="sa-row"><span class="l">方向</span><span class="v">${isLong ? "📈 做多" : "📉 做空"} ${t.sym}</span></div>
       <div class="sa-row"><span class="l">保证金</span><span class="v">$${t.margin} × ${t.leverage}x = $${(t.margin * t.leverage).toLocaleString()}</span></div>
       <div class="sa-row"><span class="l">当前得分</span><span class="v">${getCurrentSignalScore()}/100</span></div>`;
-    return;
   }
 
-  // 持仓中 - 显示交易类型标记
   const typeTag = t.tradeType === "impulse" ? "🔥冲动" : "📊策略";
-
-  // 持仓中
   const qty = t.margin * t.leverage / t.entryPrice;
   const curPct = isLong ? (price / t.entryPrice - 1) : (1 - price / t.entryPrice);
   const uPnl = t.margin * t.leverage * curPct;
@@ -969,7 +968,7 @@ function renderSimActive(t) {
   const distSL = Math.abs((t.slPrice / price - 1) * 100).toFixed(2);
   const distLiq = Math.abs((t.liqPrice / price - 1) * 100).toFixed(2);
 
-  el.innerHTML = `
+  return `
     <div class="sa-status open">🟢 持仓中 [${typeTag}]: ${isLong ? "做多" : "做空"} ${t.sym} ${t.leverage}x</div>
     <div class="sa-row"><span class="l">入场</span><span class="v">${fmtP(t.entryPrice)} (${new Date(t.entryTime).toLocaleTimeString("zh-CN", {hour12:false})})</span></div>
     <div class="sa-row"><span class="l">当前价</span><span class="v">${fmtP(price)}</span></div>
@@ -982,13 +981,14 @@ function renderSimActive(t) {
 
 // ==================== 冲动开仓: 不等信号立即成交 ====================
 function openImpulse(dir) {
-  const m = +$("simMargin").value || +$("margin").value || 100;
-  const lev = Math.min(125, Math.max(1, +$("simLev").value || +$("lev").value || 10));
+  const m = +$("margin").value || +$("simMargin").value || 100;
+  const lev = Math.min(125, Math.max(1, +$("lev").value || +$("simLev").value || 10));
   if (price <= 0) return;
   const list = loadSim();
-  const hasActive = list.some(t => t.coin === coin && (t.status === "waiting" || t.status === "open"));
-  if (hasActive) {
-    alert(`已有 ${META[coin].sym} 的未完结交易`);
+  // 冲动仓只检查冲动仓(策略仓可以并存)
+  const hasImpulse = list.some(t => t.coin === coin && t.tradeType === "impulse" && t.status === "open");
+  if (hasImpulse) {
+    alert(`已有 ${META[coin].sym} 的冲动仓在运行`);
     return;
   }
   const isLong = dir === "long";

@@ -80,19 +80,19 @@
       </div>
       <div id="btResult" class="bt-result hidden"></div>
       <div id="btTrades" class="bt-trades hidden"></div>
-      <button id="simStartBtn" class="sim-start hidden">🚀 开始模拟交易（验证此策略）</button>
+    </div>
+    <div class="card forward-card">
+      <div class="card-title">📋 模拟交易记录 <span class="sub">策略 vs 冲动</span></div>
+      <button id="simStartBtn" class="sim-start">🚀 策略开仓（等信号自动触发）</button>
       <div id="simForm" class="sim-form hidden">
-        <div class="sim-form-title">⚙️ 模拟交易参数</div>
+        <div class="sim-form-title">⚙️ 策略交易参数</div>
         <div class="sim-form-grid">
           <label>保证金(U)<input id="simMargin" type="number" value="100" min="10"></label>
           <label>杠杆<input id="simLev" type="number" value="10" min="1" max="125">x</label>
         </div>
         <div id="simPreview" class="sim-preview"></div>
-        <button id="simConfirm" class="sim-confirm">✅ 确认开仓（等信号触发）</button>
+        <button id="simConfirm" class="sim-confirm">✅ 确认（信号≥50时自动开仓）</button>
       </div>
-    </div>
-    <div class="card forward-card">
-      <div class="card-title">📋 模拟交易记录</div>
       <div id="simCompare" class="sim-compare"></div>
       <div id="simActive" class="sim-active hidden"></div>
       <div id="simHistory" class="sim-history"><span class="loading">暂无记录</span></div>
