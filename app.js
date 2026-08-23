@@ -402,7 +402,7 @@ function runXray() {
     上方成交${abovePOC > belowPOC ? "更多" : "更少"}（${(abovePOC / (abovePOC + belowPOC) * 100).toFixed(0)}%），
     ${abovePOC > belowPOC ? "说明追高意愿强，买方愿意溢价买入" : "说明上方抛压重，卖方在高位积极出货"}。`;
 
-  // ========== ② 交易者画像 ==========
+  // ========== ② 交易者画像(含成交量权重) ==========
   const cats = [
     { label: "🧑 散户", max: 1000, cls: "retail", buy: 0, sell: 0, n: 0 },
     { label: "🧑‍💼 中户", max: 10000, cls: "mid", buy: 0, sell: 0, n: 0 },
@@ -416,16 +416,27 @@ function runXray() {
     c.n++;
   });
 
+  // 计算总成交额和各类占比
+  const totalUsd = cats.reduce((s, c) => s + c.buy + c.sell, 0) || 1;
+  let weightedBuySum = 0;   // 加权买占比 = Σ(类别金额×类别买占比) / 总金额
+  cats.forEach(c => {
+    const vol = c.buy + c.sell;
+    c.vol = vol;
+    c.volPct = vol / totalUsd * 100;
+    if (vol > 0) weightedBuySum += c.buy;   // 直接加总买入金额
+  });
+  const weightedBuyPct = (weightedBuySum / totalUsd * 100).toFixed(1);
+
   $("xrayTraders").innerHTML = cats.map(c => {
-    const total = c.buy + c.sell;
-    if (total === 0) return "";
-    const buyPct = c.buy / total * 100;
+    if (c.vol === 0) return "";
+    const buyPct = c.buy / c.vol * 100;
     const wBuy = buyPct.toFixed(0);
-    const verdict = buyPct > 60 ? '<span style="color:var(--up)">净买入</span>'
-                  : buyPct < 40 ? '<span style="color:var(--down)">净卖出</span>'
+    const verdict = buyPct > 60 ? '<span style="color:var(--up)">净买</span>'
+                  : buyPct < 40 ? '<span style="color:var(--down)">净卖</span>'
                   : '<span style="color:var(--muted)">均衡</span>';
     return `<div class="tr-row">
       <span class="tr-label ${c.cls}">${c.label}</span>
+      <span class="tr-vol">${fmtU(c.vol)}<small style="color:var(--muted)">(${c.volPct.toFixed(0)}%)</small></span>
       <span class="tr-bar-wrap">
         <span class="tr-buy-bar" style="width:${wBuy}%"></span>
         <span class="tr-sell-bar" style="width:${100 - wBuy}%"></span>
@@ -434,7 +445,17 @@ function runXray() {
       <span class="tr-sellpct">${c.n}笔</span>
       <span class="tr-verdict">${verdict}</span>
     </div>`;
-  }).join("");
+  }).join("") + `
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 8px;margin-top:4px;background:rgba(240,185,11,0.08);border-radius:5px;font-size:12px">
+    <span style="color:var(--muted)">📊 成交量加权买占比</span>
+    <b style="font-size:16px;color:${weightedBuyPct >= 50 ? "var(--up)" : "var(--down)"}">${weightedBuyPct}%</b>
+  </div>
+  <div style="font-size:10px;color:var(--muted);padding:2px 4px;margin-top:2px">
+    总成交 ${fmtU(totalUsd)} · 谁的钱多谁说了算: ${(() => {
+      const dominant = cats.reduce((m, c) => c.volPct > m.volPct ? c : m, cats[0]);
+      return dominant.volPct > 50 ? `<b style="color:var(--accent)">${dominant.label}</b> 占${dominant.volPct.toFixed(0)}%的量, 主导方向` : "无单一类别过半";
+    })()}
+  </div>`;
 
   const whale = cats[3], retail = cats[0];
   let traderInsight = "";

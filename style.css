@@ -873,3 +873,11 @@ footer {
   cursor: pointer;
 }
 .export-btn:hover { background: rgba(240,185,11,0.1); }
+
+.tr-row { grid-template-columns: 55px 95px 1fr 42px 42px 50px !important; }
+.tr-vol {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
