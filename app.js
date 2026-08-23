@@ -205,25 +205,74 @@ function renderPriceChart() {
   const t0 = new Date(+done[0][0]), t1 = new Date(+done[done.length - 1][0]);
   const ft = d => d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
 
+  const curP = price || closes[closes.length - 1];
+
+  // 4H 统计: 平均数 / 中位数 / 众数
+  const stats = calcPriceStats(closes);
+
+  // 在图表上画统计线
+  let statLines = "";
+  if (stats.avg >= minP && stats.avg <= maxP) {
+    statLines += `<line x1="${PL}" y1="${y(stats.avg)}" x2="${W-PR}" y2="${y(stats.avg)}" stroke="#a855f7" stroke-width="0.8" stroke-dasharray="6,3" opacity="0.7"/>
+      <text x="${PL+2}" y="${y(stats.avg)-2}" font-size="7.5" fill="#a855f7">均${fmtP(stats.avg)}</text>`;
+  }
+  if (stats.median >= minP && stats.median <= maxP) {
+    statLines += `<line x1="${PL}" y1="${y(stats.median)}" x2="${W-PR}" y2="${y(stats.median)}" stroke="#f0b90b" stroke-width="0.8" stroke-dasharray="3,3" opacity="0.6"/>
+      <text x="${PL+2}" y="${y(stats.median)-2}" font-size="7.5" fill="#f0b90b">中${fmtP(stats.median)}</text>`;
+  }
+  if (stats.mode >= minP && stats.mode <= maxP && stats.modeCount > 2) {
+    statLines += `<line x1="${PL}" y1="${y(stats.mode)}" x2="${W-PR}" y2="${y(stats.mode)}" stroke="#24b28c" stroke-width="0.8" stroke-dasharray="1,3" opacity="0.6"/>
+      <text x="${PL+2}" y="${y(stats.mode)-2}" font-size="7.5" fill="#24b28c">众${fmtP(stats.mode)}×${stats.modeCount}</text>`;
+  }
+
   $("priceChart").innerHTML = `<svg viewBox="0 0 ${W} ${H}">
     <polygon points="${PL},${H-PB} ${pts} ${x(closes.length-1)},${H-PB}" fill="${color}" opacity="0.08"/>
     <line x1="${PL}" y1="${y(maxP)}" x2="${W-PR}" y2="${y(maxP)}" stroke="#2a3242" stroke-dasharray="3,3" stroke-width="0.5"/>
     <line x1="${PL}" y1="${y(minP)}" x2="${W-PR}" y2="${y(minP)}" stroke="#2a3242" stroke-dasharray="3,3" stroke-width="0.5"/>
-    <line x1="${PL}" y1="${y(price)}" x2="${W-PR}" y2="${y(price)}" stroke="${color}" stroke-dasharray="4,3" stroke-width="0.8" opacity="0.6"/>
+    <line x1="${PL}" y1="${y(curP)}" x2="${W-PR}" y2="${y(curP)}" stroke="${color}" stroke-dasharray="4,3" stroke-width="0.8" opacity="0.6"/>
     <text x="${PL-4}" y="${y(maxP)+3}" text-anchor="end" font-size="9" fill="#7a8299">${fmtP(maxP)}</text>
     <text x="${PL-4}" y="${y(minP)+3}" text-anchor="end" font-size="9" fill="#7a8299">${fmtP(minP)}</text>
+    ${statLines}
     <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/>
     <circle cx="${x(closes.length-1)}" cy="${y(closes[closes.length-1])}" r="3" fill="${color}"/>
     <text x="${W-PR}" y="14" text-anchor="end" font-size="11" fill="${color}" font-weight="700">${chg>=0?"+":""}${chg.toFixed(2)}%</text>
     <text x="${PL}" y="${H-4}" font-size="8" fill="#7a8299">${ft(t0)}</text>
     <text x="${W-PR}" y="${H-4}" text-anchor="end" font-size="8" fill="#7a8299">${ft(t1)}</text>
   </svg>`;
-  const curP = price || closes[closes.length - 1];
+
+  const curVsAvg = ((curP / stats.avg - 1) * 100).toFixed(2);
+  const avgColor = curP >= stats.avg ? "var(--up)" : "var(--down)";
   $("priceInfo").innerHTML = `
     <span style="font-size:15px;font-weight:800;color:${color}">${fmtP(curP)}</span>
     <span style="color:var(--muted)"> USDT</span>
-    <span style="color:${color};font-weight:700;margin-left:8px">${chg>=0?"▲":"▼"}${Math.abs(chg).toFixed(2)}%</span>
-    <span style="color:var(--muted);margin-left:8px">4H高 ${fmtP(maxP)} / 低 ${fmtP(minP)}</span>`;
+    <span style="color:${color};font-weight:700;margin-left:6px">${chg>=0?"▲":"▼"}${Math.abs(chg).toFixed(2)}%</span>
+    <span style="color:var(--muted);margin-left:8px">高${fmtP(maxP)} 低${fmtP(minP)}</span>
+    <span style="margin-left:8px;color:#a855f7">均<b>${fmtP(stats.avg)}</b><small>(${curVsAvg>=0?"+":""}${curVsAvg}%)</small></span>
+    <span style="margin-left:6px;color:#f0b90b">中<b>${fmtP(stats.median)}</b></span>
+    <span style="margin-left:6px;color:#24b28c">众<b>${fmtP(stats.mode)}</b><small>×${stats.modeCount}</small></span>`;
+}
+
+// 4H价格统计: 平均/中位/众数
+function calcPriceStats(closes) {
+  const n = closes.length;
+  const sorted = [...closes].sort((a, b) => a - b);
+  const avg = closes.reduce((s, c) => s + c, 0) / n;
+  const median = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+
+  // 众数: 按价格精度分桶, 找出现最多的桶
+  const range = sorted[n - 1] - sorted[0];
+  const bucketSize = range > 100 ? 10 : range > 1 ? 0.1 : range > 0.01 ? 0.001 : 0.0001;
+  const buckets = {};
+  closes.forEach(c => {
+    const key = Math.round(c / bucketSize) * bucketSize;
+    buckets[key] = (buckets[key] || 0) + 1;
+  });
+  let mode = 0, modeCount = 0;
+  Object.entries(buckets).forEach(([k, v]) => {
+    if (v > modeCount) { modeCount = v; mode = +k; }
+  });
+
+  return { avg, median, mode, modeCount };
 }
 
 // ==================== 成交量图表 ====================
