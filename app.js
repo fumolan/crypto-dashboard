@@ -85,14 +85,17 @@ async function apiGet(path) {
 }
 
 // ==================== 数据获取 ====================
+let fetchGen = 0;   // 请求代数: 切换币种后, 旧币种的在途请求返回时作废, 防止覆盖新币数据
 async function fetchAll() {
+  const gen = ++fetchGen;
+  const target = coin;   // 本次请求针对的币种
   $("statusDot").className = "dot";
   try {
     // 基础数据始终从币安(K线/行情), 大单和盘口按数据源切换
     const [k5, tickers, all1h] = await Promise.all([
       apiGet(`/api/v3/klines?symbol=${coin}&interval=5m&limit=49`),
       apiGet(`/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(SYMBOLS))}`),
-      Promise.all(SYMBOLS.map(s => apiGet(`/api/v3/klines?symbol=${s}&interval=1h&limit=25`).catch(() => null))),
+      Promise.all(SYMBOLS.map(s => apiGet(`/api/v3/klines?symbol=${s}&interval=1h&limit=25}`).catch(() => null))),
     ]);
 
     // 大单 + 盘口按数据源
@@ -108,6 +111,9 @@ async function fetchAll() {
         apiGet(`/api/v3/depth?symbol=${coin}&limit=100`).catch(() => null),
       ]);
     }
+
+    // 期间切换了币种/数据源 → 本响应已过期, 丢弃, 防止旧币数据混入新币页面
+    if (gen !== fetchGen || target !== coin) return;
 
     klines5m = k5;
     const tickerMap = {};
@@ -136,6 +142,7 @@ async function fetchAll() {
     $("lastUpdate").textContent = fmtClock(new Date());
     renderAll(tickerMap);
   } catch (e) {
+    if (gen !== fetchGen) return;   // 过期请求的报错不算数
     $("statusDot").className = "dot err";
     console.error("fetchAll:", e);
   }
@@ -1141,6 +1148,7 @@ $("simConfirm").addEventListener("click", () => {
   saveSim(list);
   $("simForm").classList.add("hidden");
   checkSimTrades();
+  fetchAll();   // 开仓后立即按当前选中币种重载数据, 页面数据与新仓保持一致
 });
 
 // 每次刷新调用: 管理模拟交易生命周期
@@ -1293,12 +1301,20 @@ function closeSimTrade(id) {
   const exitP = priceOf(t.coin);
   if (!exitP || exitP <= 0) { alert("价格未加载, 请稍后重试"); return; }
   const isLong = t.direction === "long";
-  const pl = isLong ? (exitP / t.entryPrice - 1) : (1 - exitP / t.entryPrice);
-  t.status = "manual";
-  t.exitPrice = exitP;
-  t.exitTime = Date.now();
-  t.pnl = +(t.margin * t.leverage * pl).toFixed(2);
-  t.roi = +(pl * t.leverage * 100).toFixed(1);
+  // 现实约束: 若价格已穿越爆仓价, 真实交易所早已强平, 按爆仓结算(亏损封顶=保证金)
+  if (isLong ? exitP <= t.liqPrice : exitP >= t.liqPrice) {
+    t.status = "liquidated";
+    t.exitPrice = t.liqPrice;
+    t.exitTime = Date.now();
+    t.pnl = -t.margin; t.roi = -100;
+  } else {
+    const pl = isLong ? (exitP / t.entryPrice - 1) : (1 - exitP / t.entryPrice);
+    t.status = "manual";
+    t.exitPrice = exitP;
+    t.exitTime = Date.now();
+    t.pnl = +(t.margin * t.leverage * pl).toFixed(2);
+    t.roi = +(pl * t.leverage * 100).toFixed(1);
+  }
   saveSim(list);
   // 直接渲染, 不走checkSimTrades避免被覆盖
   const actives = list.filter(x => x.coin === coin && (x.status === "waiting" || x.status === "open"));
@@ -1362,6 +1378,7 @@ function openImpulse(dir) {
   });
   saveSim(list);
   checkSimTrades();
+  fetchAll();   // 冲动开仓同样立即重载当前币种数据
 }
 
 $("impulseLong").addEventListener("click", () => openImpulse("long"));
