@@ -101,22 +101,35 @@
       <div id="trendList" class="trend-list"><span class="loading">加载中…</span></div>
     </div>
     <div class="card calc-card">
-      <div class="card-title">🧮 爆仓价 & 利润计算器</div>
+      <div class="card-title">🧮 爆仓价 & 利润计算器 <span id="curPrice" class="calc-cur-price">--</span></div>
       <div class="calc-grid">
         <label>杠杆<input id="lev" type="number" value="10" min="1" max="125">x</label>
         <label>保证金<input id="margin" type="number" value="100">U</label>
-        <label>开仓价<input id="entry" type="number" step="any" placeholder="现价">USDT</label>
+        <label>开仓价<input id="entry" type="number" step="any" placeholder="自动现价">USDT</label>
         <label>平仓价<input id="exitP" type="number" step="any" placeholder="可选">USDT</label>
         <label>维持保证金率
           <select id="mmr"><option value="0.004">0.4%</option><option value="0.005" selected>0.5%</option><option value="0.01">1%</option></select>
         </label>
       </div>
+      <div class="calc-tps">
+        <div class="ctp long">
+          <span class="ctp-h">📈 做多</span>
+          <span>爆仓 <b id="liqLong" class="c-red">--</b></span>
+          <span>止损(-1%) <b id="slLong" class="c-green">--</b></span>
+          <span>止盈(+2%) <b id="tpLong" class="c-green">--</b></span>
+        </div>
+        <div class="ctp short">
+          <span class="ctp-h">📉 做空</span>
+          <span>爆仓 <b id="liqShort" class="c-green">--</b></span>
+          <span>止损(-1%) <b id="slShort" class="c-red">--</b></span>
+          <span>止盈(+2%) <b id="tpShort" class="c-green">--</b></span>
+        </div>
+      </div>
       <div class="calc-results">
-        <div class="cr"><label>做多爆仓</label><b id="liqLong">--</b></div>
         <div class="cr"><label>做多利润</label><b id="pnlLong">--</b></div>
-        <div class="cr"><label>做空爆仓</label><b id="liqShort">--</b></div>
         <div class="cr"><label>做空利润</label><b id="pnlShort">--</b></div>
         <div class="cr"><label>仓位 ≈</label><b id="posSize">--</b></div>
+        <div class="cr"><label>止盈赚</label><b id="tpProfit" style="color:var(--down)">--</b></div>
       </div>
     </div>
   </div>

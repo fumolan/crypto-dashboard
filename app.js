@@ -608,6 +608,12 @@ function renderWalls() {
 
 // ==================== 计算器 ====================
 function updateCalc() {
+  // 当前价显示
+  if (price > 0) {
+    $("curPrice").textContent = fmtP(price);
+    // 开仓价留空时自动跟随现价
+    if (!$("entry").value) $("entry").value = price;
+  }
   const lev = Math.min(125, Math.max(1, +$("lev").value || 10));
   const mmr = +$("mmr").value || 0.005;
   const margin = +$("margin").value || 0;
@@ -615,10 +621,20 @@ function updateCalc() {
   if (entry <= 0) return;
   const exitP = +$("exitP").value || entry;
   const imr = 1 / lev;
+  const TP = 0.02, SL = 0.01;
+
+  // 爆仓价
   const lpL = entry * (1 - imr + mmr);
   const lpS = entry * (1 + imr - mmr);
   $("liqLong").textContent = fmtP(lpL);
   $("liqShort").textContent = fmtP(lpS);
+
+  // 止盈止损价
+  $("tpLong").textContent = fmtP(entry * (1 + TP));
+  $("slLong").textContent = fmtP(entry * (1 - SL));
+  $("tpShort").textContent = fmtP(entry * (1 - TP));
+  $("slShort").textContent = fmtP(entry * (1 + SL));
+
   if (margin > 0) {
     const qty = margin * lev / entry;
     const pnlL = qty * (exitP - entry);
@@ -628,6 +644,7 @@ function updateCalc() {
     $("pnlShort").textContent = `${pnlS >= 0 ? "+" : ""}${pnlS.toFixed(2)}U`;
     $("pnlShort").style.color = pnlS >= 0 ? "var(--up)" : "var(--down)";
     $("posSize").textContent = `${fmtU(margin * lev)} (${qty < 1 ? qty.toFixed(4) : fmtQ(qty)} ${META[coin].sym})`;
+    $("tpProfit").textContent = `+$${(margin * lev * TP).toFixed(2)}`;
   }
 }
 
