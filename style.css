@@ -881,3 +881,10 @@ footer {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+
+.sa-close {
+  color: var(--down);
+  border-color: var(--down) !important;
+  font-weight: 700;
+}
+.sa-close:hover { background: rgba(36,178,140,0.1); }

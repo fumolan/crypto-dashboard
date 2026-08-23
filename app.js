@@ -1267,9 +1267,27 @@ function renderOneActive(t) {
     <div class="sa-row"><span class="l">爆仓</span><span class="v" style="color:#ff4444">${fmtP(t.liqPrice)} (距${distLiq}%)</span></div>
     <div class="sa-row"><span class="l">数量</span><span class="v">${qty < 1 ? qty.toFixed(4) : qty.toFixed(2)} ${t.sym}</span></div>
     <div class="sa-actions">
-      <button class="sa-edit" onclick="editSimTrade(${t.id})">✏️ 改杠杆/保证金</button>
+      <button class="sa-close" onclick="closeSimTrade(${t.id})">💰 平仓</button>
+      <button class="sa-edit" onclick="editSimTrade(${t.id})">✏️ 改杠杆</button>
       <button class="sa-del" onclick="deleteSimTrade(${t.id})">🗑️ 删除</button>
     </div>`;
+}
+
+// 平仓: 以当前价格结算
+function closeSimTrade(id) {
+  const list = loadSim();
+  const t = list.find(x => x.id === id);
+  if (!t || t.status !== "open") return;
+  const isLong = t.direction === "long";
+  const pl = isLong ? (price / t.entryPrice - 1) : (1 - price / t.entryPrice);
+  t.status = pl >= 0 ? "win" : "loss";
+  t.exitPrice = price;
+  t.exitTime = Date.now();
+  t.pnl = t.margin * t.leverage * pl;
+  t.roi = pl * t.leverage * 100;
+  t.manualClose = true;
+  saveSim(list);
+  checkSimTrades();
 }
 
 // 删除模拟交易
