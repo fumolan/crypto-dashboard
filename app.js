@@ -29,6 +29,7 @@ let klines1h = {};      // 各币1小时线(趋势/信号用)
 let trades = [];        // 大单
 let depth = null;       // 盘口
 let globalMC = 0;       // 总市值
+let tickerCache = {};   // 24h行情缓存(主流币价格条用)
 let wallHistory = new Map();
 let lastWhaleBuyQ = 0, lastWhaleSellQ = 0;
 let refreshTimer = null;
@@ -145,6 +146,8 @@ function getMinTradeQty(sym) {
 
 // ==================== 渲染调度 ====================
 function renderAll(tickerMap) {
+  if (tickerMap) tickerCache = tickerMap;
+  renderCoinStrip();
   renderPriceChart();
   renderVolumeChart();
   renderMCChart();
@@ -153,6 +156,35 @@ function renderAll(tickerMap) {
   renderTrades();
   renderWalls();
   updateCalc();
+}
+
+// ==================== 主流币价格条 ====================
+function renderCoinStrip() {
+  const chips = SYMBOLS.map(s => {
+    const t = tickerCache[s];
+    if (!t) return "";
+    const p = parseFloat(t.lastPrice);
+    const chg = parseFloat(t.priceChangePercent);
+    const cls = chg >= 0 ? "up" : "down";
+    const arrow = chg >= 0 ? "▲" : "▼";
+    const active = s === coin ? " active" : "";
+    return `<div class="coin-chip${active}" data-sym="${s}" title="点击切换到 ${META[s].sym}">
+      <div class="cc-sym">${META[s].sym}${META[s].name ? ` <span style="color:var(--muted);font-size:10px">${META[s].name}</span>` : ""}</div>
+      <div class="cc-price">${fmtP(p)}</div>
+      <div class="cc-chg ${cls}">${arrow}${Math.abs(chg).toFixed(2)}%</div>
+    </div>`;
+  }).join("");
+  $("coinStrip").innerHTML = chips || "<span class='loading'>加载中…</span>";
+  // 点击切换币种
+  $("coinStrip").querySelectorAll(".coin-chip").forEach(el => {
+    el.addEventListener("click", () => {
+      coin = el.dataset.sym;
+      $("coinSel").value = coin;
+      wallHistory.clear();
+      $("entry").value = "";
+      fetchAll();
+    });
+  });
 }
 
 // ==================== 价格图表 ====================
@@ -564,20 +596,28 @@ async function runBacktest(dir) {
     const TP = 0.02, SL = 0.01, MAX = 24;
     let trades = 0, wins = 0, losses = 0, totalPL = 0;
     let open = null;
+    let totalHoldBars = 0;
+    const t0 = +kl[0][0], t1 = +kl[kl.length - 1][0];
+    const spanDays = ((t1 - t0) / 86400000).toFixed(0);
     for (let i = 50; i < kl.length; i++) {
       const close = +kl[i][4];
       if (open) {
         const h = +kl[i][2], l = +kl[i][3];
+        let exited = false;
         if (isLong) {
-          if (h >= open.e * (1 + TP)) { totalPL += TP; trades++; wins++; open = null; }
-          else if (l <= open.e * (1 - SL)) { totalPL -= SL; trades++; losses++; open = null; }
+          if (h >= open.e * (1 + TP)) { totalPL += TP; trades++; wins++; exited = true; }
+          else if (l <= open.e * (1 - SL)) { totalPL -= SL; trades++; losses++; exited = true; }
         } else {
-          if (l <= open.e * (1 - TP)) { totalPL += TP; trades++; wins++; open = null; }
-          else if (h >= open.e * (1 + SL)) { totalPL -= SL; trades++; losses++; open = null; }
+          if (l <= open.e * (1 - TP)) { totalPL += TP; trades++; wins++; exited = true; }
+          else if (h >= open.e * (1 + SL)) { totalPL -= SL; trades++; losses++; exited = true; }
         }
-        if (open && i - open.b >= MAX) {
+        if (!exited && i - open.b >= MAX) {
           const pl = isLong ? close / open.e - 1 : 1 - close / open.e;
           totalPL += pl; trades++; if (pl >= 0) wins++; else losses++;
+          exited = true;
+        }
+        if (exited) {
+          totalHoldBars += i - open.b;
           open = null;
         }
         continue;
@@ -597,10 +637,14 @@ async function runBacktest(dir) {
       if (score >= 3) open = { e: close, b: i };
     }
     const wr = trades > 0 ? (wins / trades * 100).toFixed(1) : 0;
+    const avgHold = trades > 0 ? (totalHoldBars / trades).toFixed(1) : 0;
+    const avgHoldStr = avgHold >= 24 ? `${(avgHold / 24).toFixed(1)}天` : `${avgHold}小时`;
     el.innerHTML = `
       <div class="r"><span>${isLong ? "📈做多" : "📉做空"} ${META[coin].sym}</span><b>${trades}笔</b></div>
       <div class="r"><span>胜率</span><b class="${wr >= 50 ? "good" : "bad"}">${wr}% (${wins}W/${losses}L)</b></div>
-      <div class="r"><span>累计</span><b class="${totalPL >= 0 ? "good" : "bad"}">${totalPL >= 0 ? "+" : ""}${(totalPL * 100).toFixed(1)}%</b></div>`;
+      <div class="r"><span>累计</span><b class="${totalPL >= 0 ? "good" : "bad"}">${totalPL >= 0 ? "+" : ""}${(totalPL * 100).toFixed(1)}%</b></div>
+      <div class="r"><span>回测周期</span><b>${spanDays}天</b></div>
+      <div class="r"><span>平均持仓</span><b>${avgHoldStr}</b></div>`;
   } catch (e) {
     el.innerHTML = `<span style="color:var(--up)">失败: ${e.message}</span>`;
   } finally {
