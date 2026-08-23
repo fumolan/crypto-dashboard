@@ -663,3 +663,16 @@ footer {
   font-weight: 700;
   text-align: center;
 }
+
+.impulse-preview {
+  margin: 5px 0;
+  padding: 5px 8px;
+  background: rgba(42,50,66,0.3);
+  border-radius: 5px;
+  font-size: 10.5px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+.impulse-preview b { color: var(--text); font-variant-numeric: tabular-nums; }
+.impulse-preview .tp { color: var(--down); font-weight: 700; }
+.impulse-preview .sl { color: var(--up); font-weight: 700; }

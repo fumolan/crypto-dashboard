@@ -646,6 +646,16 @@ function updateCalc() {
     $("posSize").textContent = `${fmtU(margin * lev)} (${qty < 1 ? qty.toFixed(4) : fmtQ(qty)} ${META[coin].sym})`;
     $("tpProfit").textContent = `+$${(margin * lev * TP).toFixed(2)}`;
   }
+
+  // 冲动开仓预览(显示即将开仓的价格信息)
+  const impPreview = $("impulsePreview");
+  if (impPreview && price > 0) {
+    impPreview.innerHTML = `
+      开仓 <b>${fmtP(entry)}</b> (现价) |
+      做多: 止盈 <span class="tp">${fmtP(entry * 1.02)}</span> / 止损 <span class="sl">${fmtP(entry * 0.99)}</span><br>
+      做空: 止盈 <span class="tp">${fmtP(entry * 0.98)}</span> / 止损 <span class="sl">${fmtP(entry * 1.01)}</span> |
+      仓位 <b>${fmtU(margin * lev)}</b> · 止盈赚 <span class="tp">+$${(margin * lev * TP).toFixed(2)}</span>`;
+  }
 }
 
 // ==================== 回测 ====================

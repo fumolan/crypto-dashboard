@@ -93,17 +93,6 @@
     </div>
     <div class="card forward-card">
       <div class="card-title">📋 模拟交易记录</div>
-
-      <!-- 冲动开仓区 -->
-      <div class="impulse-box">
-        <div class="impulse-title">🔥 冲动开仓 <span class="sub">不等信号 · 立即成交 · 看清人性代价</span></div>
-        <div class="impulse-btns">
-          <button id="impulseLong" class="impulse-btn il">📈 立即做多</button>
-          <button id="impulseShort" class="impulse-btn is">📉 立即做空</button>
-        </div>
-        <div class="impulse-hint">用当前信号计算器旁设置的保证金和杠杆 · 当前得分: <b id="impulseScore">--</b></div>
-      </div>
-
       <div id="simCompare" class="sim-compare"></div>
       <div id="simActive" class="sim-active hidden"></div>
       <div id="simHistory" class="sim-history"><span class="loading">暂无记录</span></div>
@@ -142,6 +131,16 @@
         <div class="cr"><label>做空利润</label><b id="pnlShort">--</b></div>
         <div class="cr"><label>仓位 ≈</label><b id="posSize">--</b></div>
         <div class="cr"><label>止盈赚</label><b id="tpProfit" style="color:var(--down)">--</b></div>
+      </div>
+
+      <!-- 冲动开仓区(计算器下方) -->
+      <div class="impulse-box">
+        <div class="impulse-title">🔥 冲动开仓 <span class="sub">不等信号 · 立即成交</span> <span id="impulseScore" class="sub" style="margin-left:auto">得分: --</span></div>
+        <div class="impulse-preview" id="impulsePreview"></div>
+        <div class="impulse-btns">
+          <button id="impulseLong" class="impulse-btn il">📈 立即做多</button>
+          <button id="impulseShort" class="impulse-btn is">📉 立即做空</button>
+        </div>
       </div>
     </div>
   </div>
