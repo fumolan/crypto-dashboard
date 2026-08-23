@@ -90,11 +90,23 @@
         <div id="simPreview" class="sim-preview"></div>
         <button id="simConfirm" class="sim-confirm">✅ 确认开仓（等信号触发）</button>
       </div>
-      <div id="simActive" class="sim-active hidden"></div>
     </div>
     <div class="card forward-card">
-      <div class="card-title">📋 模拟交易记录 <span class="sub">策略验证 · 自动追踪</span></div>
-      <div id="simHistory" class="sim-history"><span class="loading">暂无记录 · 回测后点击"模拟交易"开始</span></div>
+      <div class="card-title">📋 模拟交易记录</div>
+
+      <!-- 冲动开仓区 -->
+      <div class="impulse-box">
+        <div class="impulse-title">🔥 冲动开仓 <span class="sub">不等信号 · 立即成交 · 看清人性代价</span></div>
+        <div class="impulse-btns">
+          <button id="impulseLong" class="impulse-btn il">📈 立即做多</button>
+          <button id="impulseShort" class="impulse-btn is">📉 立即做空</button>
+        </div>
+        <div class="impulse-hint">用当前信号计算器旁设置的保证金和杠杆 · 当前得分: <b id="impulseScore">--</b></div>
+      </div>
+
+      <div id="simCompare" class="sim-compare"></div>
+      <div id="simActive" class="sim-active hidden"></div>
+      <div id="simHistory" class="sim-history"><span class="loading">暂无记录</span></div>
     </div>
     <div class="card trend-card">
       <div class="card-title">📊 趋势解读 <span class="sub">各币种量价分析</span></div>

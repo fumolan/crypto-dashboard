@@ -595,3 +595,71 @@ footer {
 .ctp b { font-variant-numeric: tabular-nums; font-size: 11px; }
 .c-red { color: var(--up); }
 .c-green { color: var(--down); }
+
+/* ---------- 冲动开仓 ---------- */
+.impulse-box {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: rgba(229, 69, 69, 0.06);
+  border: 1px dashed rgba(229, 69, 69, 0.3);
+  border-radius: 8px;
+}
+.impulse-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--up);
+  margin-bottom: 6px;
+}
+.impulse-btns { display: flex; gap: 6px; }
+.impulse-btn {
+  flex: 1;
+  padding: 8px;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.impulse-btn:active { transform: scale(0.97); }
+.impulse-btn.il {
+  background: linear-gradient(135deg, #c0392b, #e54545);
+  color: #fff;
+}
+.impulse-btn.is {
+  background: linear-gradient(135deg, #1e8e63, #24b28c);
+  color: #fff;
+}
+.impulse-hint {
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.sim-compare {
+  margin-bottom: 8px;
+  padding: 8px;
+  background: var(--bg);
+  border-radius: 8px;
+}
+.scmp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0;
+  font-size: 11.5px;
+}
+.scmp-label { width: 70px; font-weight: 700; }
+.scmp-label.strategy { color: var(--down); }
+.scmp-label.impulse { color: var(--up); }
+.scmp-detail { flex: 1; color: var(--muted); font-size: 10.5px; }
+.scmp-pnl { font-weight: 800; font-variant-numeric: tabular-nums; }
+.scmp-verdict {
+  margin-top: 5px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-align: center;
+}

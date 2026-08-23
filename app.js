@@ -821,6 +821,7 @@ $("simConfirm").addEventListener("click", () => {
   }
   list.push({
     id: Date.now(),
+    tradeType: "strategy",
     direction: simDirection,
     coin,
     sym: META[coin].sym,
@@ -840,6 +841,8 @@ $("simConfirm").addEventListener("click", () => {
 // 每次刷新调用: 管理模拟交易生命周期
 function checkSimTrades() {
   const list = loadSim();
+  const impScoreEl = $("impulseScore");
+  if (impScoreEl) impScoreEl.textContent = getCurrentSignalScore() + "/100";
   if (!list.length) { renderSimActive(null); renderSimHistory(list); return; }
   let changed = false;
 
@@ -936,11 +939,15 @@ function renderSimActive(t) {
   if (t.status === "waiting") {
     el.innerHTML = `
       <div class="sa-status waiting">⏳ 等待信号触发 (得分≥50时自动开仓)</div>
+      <div class="sa-row"><span class="l">类型</span><span class="v">${t.tradeType === "impulse" ? "🔥 冲动" : "📊 策略"}</span></div>
       <div class="sa-row"><span class="l">方向</span><span class="v">${isLong ? "📈 做多" : "📉 做空"} ${t.sym}</span></div>
       <div class="sa-row"><span class="l">保证金</span><span class="v">$${t.margin} × ${t.leverage}x = $${(t.margin * t.leverage).toLocaleString()}</span></div>
       <div class="sa-row"><span class="l">当前得分</span><span class="v">${getCurrentSignalScore()}/100</span></div>`;
     return;
   }
+
+  // 持仓中 - 显示交易类型标记
+  const typeTag = t.tradeType === "impulse" ? "🔥冲动" : "📊策略";
 
   // 持仓中
   const qty = t.margin * t.leverage / t.entryPrice;
@@ -953,7 +960,7 @@ function renderSimActive(t) {
   const distLiq = Math.abs((t.liqPrice / price - 1) * 100).toFixed(2);
 
   el.innerHTML = `
-    <div class="sa-status open">🟢 持仓中: ${isLong ? "做多" : "做空"} ${t.sym} ${t.leverage}x</div>
+    <div class="sa-status open">🟢 持仓中 [${typeTag}]: ${isLong ? "做多" : "做空"} ${t.sym} ${t.leverage}x</div>
     <div class="sa-row"><span class="l">入场</span><span class="v">${fmtP(t.entryPrice)} (${new Date(t.entryTime).toLocaleTimeString("zh-CN", {hour12:false})})</span></div>
     <div class="sa-row"><span class="l">当前价</span><span class="v">${fmtP(price)}</span></div>
     <div class="sa-pnl ${pnlCls}">${uPnl >= 0 ? "+" : ""}$${uPnl.toFixed(2)} (${uRoi >= 0 ? "+" : ""}${uRoi.toFixed(1)}%)</div>
@@ -963,27 +970,91 @@ function renderSimActive(t) {
     <div class="sa-row"><span class="l">数量</span><span class="v">${qty < 1 ? qty.toFixed(4) : qty.toFixed(2)} ${t.sym}</span></div>`;
 }
 
+// ==================== 冲动开仓: 不等信号立即成交 ====================
+function openImpulse(dir) {
+  const m = +$("simMargin").value || +$("margin").value || 100;
+  const lev = Math.min(125, Math.max(1, +$("simLev").value || +$("lev").value || 10));
+  if (price <= 0) return;
+  const list = loadSim();
+  const hasActive = list.some(t => t.coin === coin && (t.status === "waiting" || t.status === "open"));
+  if (hasActive) {
+    alert(`已有 ${META[coin].sym} 的未完结交易`);
+    return;
+  }
+  const isLong = dir === "long";
+  const imr = 1 / lev, mmr = 0.005;
+  const score = getCurrentSignalScore();
+  list.push({
+    id: Date.now(),
+    tradeType: "impulse",       // 冲动交易
+    direction: dir,
+    coin, sym: META[coin].sym,
+    margin: m, leverage: lev,
+    scoreAtOpen: score,          // 开仓时的信号得分
+    status: "open",              // 立即开仓
+    entryPrice: price, entryTime: Date.now(),
+    tpPrice: isLong ? price * 1.02 : price * 0.98,
+    slPrice: isLong ? price * 0.99 : price * 1.01,
+    liqPrice: isLong ? price * (1 - imr + mmr) : price * (1 + imr - mmr),
+    exitPrice: null, exitTime: null, pnl: null, roi: null,
+  });
+  saveSim(list);
+  checkSimTrades();
+}
+
+$("impulseLong").addEventListener("click", () => openImpulse("long"));
+$("impulseShort").addEventListener("click", () => openImpulse("short"));
+
 function renderSimHistory(list) {
   const closed = list.filter(t => ["win", "loss", "liquidated", "timeout"].includes(t.status));
-  if (!closed.length) { $("simHistory").innerHTML = ""; return; }
-  const wins = closed.filter(t => t.pnl > 0).length;
-  const total = closed.length;
-  const wr = (wins / total * 100).toFixed(1);
-  const totalPnl = closed.reduce((s, t) => s + (t.pnl || 0), 0);
+  if (!closed.length) { $("simHistory").innerHTML = "<span class='loading'>暂无已完结交易</span>"; $("simCompare").innerHTML = ""; return; }
+
   const fmtT = (ts) => new Date(ts).toLocaleString("zh-CN",
     { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时" };
 
-  $("simHistory").innerHTML = `
-    <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px">
-      📊 模拟交易历史: ${total}笔 | 胜率${wr}% | 总盈亏${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(2)}
-    </div>` +
-    closed.slice(-8).reverse().map(t => {
-      const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时" };
+  // 分类统计
+  const strat = closed.filter(t => t.tradeType !== "impulse");
+  const imp = closed.filter(t => t.tradeType === "impulse");
+  const stat = (arr) => {
+    if (!arr.length) return { n: 0, wr: "--", pnl: 0 };
+    const wins = arr.filter(t => t.pnl > 0).length;
+    return { n: arr.length, wr: (wins / arr.length * 100).toFixed(1), pnl: arr.reduce((s, t) => s + (t.pnl || 0), 0) };
+  };
+  const ss = stat(strat), si = stat(imp);
+
+  // 对比结论
+  let verdictHTML = "";
+  if (ss.n > 0 && si.n > 0) {
+    const diff = ss.pnl - si.pnl;
+    const better = diff > 0 ? "策略" : "冲动";
+    verdictHTML = `<div class="scmp-verdict" style="background:${diff > 0 ? "rgba(36,178,140,0.12);color:var(--down)" : "rgba(229,69,69,0.12);color:var(--up)"}">
+      ${better}交易多赚 $${Math.abs(diff).toFixed(2)} · 冲动的代价已量化
+    </div>`;
+  }
+
+  $("simCompare").innerHTML = `
+    <div class="scmp-row">
+      <span class="scmp-label strategy">📊 策略</span>
+      <span class="scmp-detail">${ss.n}笔 · 胜率${ss.wr}%</span>
+      <span class="scmp-pnl" style="color:${ss.pnl >= 0 ? "var(--down)" : "var(--up)"}">${ss.pnl >= 0 ? "+" : ""}$${ss.pnl.toFixed(2)}</span>
+    </div>
+    <div class="scmp-row">
+      <span class="scmp-label impulse">🔥 冲动</span>
+      <span class="scmp-detail">${si.n}笔 · 胜率${si.wr}%</span>
+      <span class="scmp-pnl" style="color:${si.pnl >= 0 ? "var(--down)" : "var(--up)"}">${si.pnl >= 0 ? "+" : ""}$${si.pnl.toFixed(2)}</span>
+    </div>
+    ${verdictHTML}`;
+
+  // 逐笔记录(最近10笔, 冲动标红)
+  $("simHistory").innerHTML =
+    closed.slice(-10).reverse().map(t => {
       const pos = t.pnl > 0;
-      return `<div class="sim-h-row">
+      const typeTag = t.tradeType === "impulse" ? ' <span style="color:var(--up);font-size:9px">🔥</span>' : "";
+      return `<div class="sim-h-row"${t.tradeType === "impulse" ? ' style="background:rgba(229,69,69,0.04)"' : ""}>
         <span class="sh-time">${fmtT(t.entryTime)}</span>
-        <span class="sh-sym">${t.sym}${t.direction === "long" ? "↑" : "↓"}</span>
-        <span class="sh-detail">${fmtP(t.entryPrice)}→${fmtP(t.exitPrice)} ${t.margin}U×${t.leverage}x</span>
+        <span class="sh-sym">${t.sym}${t.direction === "long" ? "↑" : "↓"}${typeTag}</span>
+        <span class="sh-detail">${fmtP(t.entryPrice)}→${fmtP(t.exitPrice)} ${t.margin}U×${t.leverage}x${t.scoreAtOpen !== undefined ? ` (${t.scoreAtOpen}分)` : ""}</span>
         <span class="sh-result ${pos ? "pos" : "neg"}" style="color:${pos ? "var(--down)" : "var(--up)"}">${resMap[t.status]}</span>
         <span class="sh-pnl ${pos ? "pos" : "neg"}">${pos ? "+" : ""}$${t.pnl.toFixed(2)}</span>
       </div>`;
