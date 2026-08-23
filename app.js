@@ -1176,9 +1176,10 @@ function checkSimTrades() {
   });
 
   if (changed) saveSim(list);
-  // 渲染当前币种的所有活跃交易(支持多个冲动仓并存, 最多显示5个)
-  const actives = list.filter(t => t.coin === coin && (t.status === "waiting" || t.status === "open"));
-  renderSimActive(actives.slice(0, 5));
+  // 渲染所有活跃交易(按币种分组, 当前币种优先)
+  const allActive = list.filter(t => t.status === "waiting" || t.status === "open");
+  const sorted = allActive.sort((a, b) => (a.coin === coin ? -1 : 1) - (b.coin === coin ? -1 : 1));
+  renderSimActive(sorted);
   renderSimHistory(list);
 }
 
@@ -1191,7 +1192,19 @@ function renderSimActive(trades) {
   const el = $("simActive");
   if (!trades || !trades.length) { el.classList.add("hidden"); return; }
   el.classList.remove("hidden");
-  el.innerHTML = trades.map(t => renderOneActive(t)).join('<div style="border-top:1px dashed var(--border);margin:6px 0"></div>');
+  let html = "", lastCoin = null;
+  trades.forEach(t => {
+    if (t.coin !== lastCoin) {
+      if (lastCoin !== null) html += '<div style="border-top:1px dashed var(--border);margin:6px 0"></div>';
+      const isCurrent = t.coin === coin;
+      html += `<div style="font-size:11px;font-weight:700;color:${isCurrent ? "var(--accent)" : "var(--muted)"};padding:3px 0;${isCurrent ? "" : "opacity:0.7"}">
+        ${isCurrent ? "▸ " : ""}${t.sym}${isCurrent ? " (当前)" : ""}</div>`;
+      lastCoin = t.coin;
+    }
+    html += renderOneActive(t);
+    html += '<div style="border-top:1px solid rgba(42,50,66,0.2);margin:4px 0"></div>';
+  });
+  el.innerHTML = html;
 }
 
 function renderOneActive(t) {
@@ -1337,20 +1350,35 @@ function renderSimHistory(list) {
     </div>
     ${verdictHTML}`;
 
-  // 逐笔记录(最近10笔, 冲动标红)
-  $("simHistory").innerHTML =
-    closed.slice(-15).reverse().map(t => {
+  // 逐笔记录(按币种分组, 最近15笔)
+  const recent = closed.slice(-15).reverse();
+  let lastHistCoin = null;
+  $("simHistory").innerHTML = recent.map(t => {
+    let coinHeader = "";
+    if (t.coin !== lastHistCoin) {
+      coinHeader = `<div style="font-size:10px;font-weight:700;color:var(--muted);padding:3px 0 1px;opacity:0.8">${t.sym}</div>`;
+      lastHistCoin = t.coin;
+    }
+    return coinHeader + renderHistRow(t);
+  }).join("");
+}
+
+function renderHistRow(t) {
+  {
       const pos = t.pnl > 0;
       const typeTag = t.tradeType === "impulse" ? ' <span style="color:var(--up);font-size:9px">🔥</span>' : "";
+      const fmtTH = (ts) => new Date(ts).toLocaleString("zh-CN",
+        { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+      const resMapH = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时" };
       return `<div class="sim-h-row"${t.tradeType === "impulse" ? ' style="background:rgba(229,69,69,0.04)"' : ""}>
-        <span class="sh-time">${fmtT(t.entryTime)}</span>
-        <span class="sh-sym">${t.sym}${t.direction === "long" ? "↑" : "↓"}${typeTag}</span>
+        <span class="sh-time">${fmtTH(t.entryTime)}</span>
+        <span class="sh-sym">${t.direction === "long" ? "↑" : "↓"}${typeTag}</span>
         <span class="sh-detail">${fmtP(t.entryPrice)}→${fmtP(t.exitPrice)} ${t.margin}U×${t.leverage}x${t.scoreAtOpen !== undefined ? ` (${t.scoreAtOpen}分)` : ""}</span>
-        <span class="sh-result ${pos ? "pos" : "neg"}" style="color:${pos ? "var(--down)" : "var(--up)"}">${resMap[t.status]}</span>
+        <span class="sh-result ${pos ? "pos" : "neg"}" style="color:${pos ? "var(--down)" : "var(--up)"}">${resMapH[t.status]}</span>
         <span class="sh-pnl ${pos ? "pos" : "neg"}">${pos ? "+" : ""}$${t.pnl.toFixed(2)}</span>
         <button class="sh-detail-btn" onclick="showTradeDetail(${t.id})">📋</button>
       </div>`;
-    }).join("");
+  }
 }
 
 function showTradeDetail(id) {
