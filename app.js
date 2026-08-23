@@ -1176,10 +1176,9 @@ function checkSimTrades() {
   });
 
   if (changed) saveSim(list);
-  // 渲染所有活跃交易(按币种分组, 当前币种优先)
-  const allActive = list.filter(t => t.status === "waiting" || t.status === "open");
-  const sorted = allActive.sort((a, b) => (a.coin === coin ? -1 : 1) - (b.coin === coin ? -1 : 1));
-  renderSimActive(sorted);
+  // 只显示当前币种的活跃交易(切换币种时自动过滤)
+  const actives = list.filter(t => t.coin === coin && (t.status === "waiting" || t.status === "open"));
+  renderSimActive(actives);
   renderSimHistory(list);
 }
 
@@ -1192,19 +1191,7 @@ function renderSimActive(trades) {
   const el = $("simActive");
   if (!trades || !trades.length) { el.classList.add("hidden"); return; }
   el.classList.remove("hidden");
-  let html = "", lastCoin = null;
-  trades.forEach(t => {
-    if (t.coin !== lastCoin) {
-      if (lastCoin !== null) html += '<div style="border-top:1px dashed var(--border);margin:6px 0"></div>';
-      const isCurrent = t.coin === coin;
-      html += `<div style="font-size:11px;font-weight:700;color:${isCurrent ? "var(--accent)" : "var(--muted)"};padding:3px 0;${isCurrent ? "" : "opacity:0.7"}">
-        ${isCurrent ? "▸ " : ""}${t.sym}${isCurrent ? " (当前)" : ""}</div>`;
-      lastCoin = t.coin;
-    }
-    html += renderOneActive(t);
-    html += '<div style="border-top:1px solid rgba(42,50,66,0.2);margin:4px 0"></div>';
-  });
-  el.innerHTML = html;
+  el.innerHTML = trades.map(t => renderOneActive(t)).join('<div style="border-top:1px dashed var(--border);margin:6px 0"></div>');
 }
 
 function renderOneActive(t) {
@@ -1350,17 +1337,12 @@ function renderSimHistory(list) {
     </div>
     ${verdictHTML}`;
 
-  // 逐笔记录(按币种分组, 最近15笔)
-  const recent = closed.slice(-15).reverse();
-  let lastHistCoin = null;
-  $("simHistory").innerHTML = recent.map(t => {
-    let coinHeader = "";
-    if (t.coin !== lastHistCoin) {
-      coinHeader = `<div style="font-size:10px;font-weight:700;color:var(--muted);padding:3px 0 1px;opacity:0.8">${t.sym}</div>`;
-      lastHistCoin = t.coin;
-    }
-    return coinHeader + renderHistRow(t);
-  }).join("");
+  // 逐笔记录(只显示当前币种, 最近15笔)
+  const coinClosed = closed.filter(t => t.coin === coin);
+  const recent = coinClosed.slice(-15).reverse();
+  $("simHistory").innerHTML = recent.length
+    ? recent.map(t => renderHistRow(t)).join("")
+    : `<span class="loading">${META[coin].sym} 暂无已完结交易</span>`;
 }
 
 function renderHistRow(t) {
