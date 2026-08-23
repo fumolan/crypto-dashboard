@@ -1559,7 +1559,7 @@ $("exportBtn").addEventListener("click", () => {
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
-    a.download = `${trades[0].sym}_交易记录_${ts}.md`;
+    a.download = `${trades[0].sym}_交易记录.md`;
     a.click();
     URL.revokeObjectURL(a.href);
   });
