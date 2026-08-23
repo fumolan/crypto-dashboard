@@ -1059,13 +1059,6 @@ $("simConfirm").addEventListener("click", () => {
   const m = +$("simMargin").value || 100;
   const lev = Math.min(125, Math.max(1, +$("simLev").value || 10));
   const list = loadSim();
-  // 策略仓和冲动仓可以并存, 但同类型只能有一个
-  const hasStrategy = list.some(t => t.coin === coin && t.tradeType !== "impulse" &&
-    (t.status === "waiting" || t.status === "open"));
-  if (hasStrategy) {
-    alert(`已有 ${META[coin].sym} 的策略仓在运行`);
-    return;
-  }
   list.push({
     id: Date.now(),
     tradeType: "strategy",
@@ -1165,9 +1158,9 @@ function checkSimTrades() {
   });
 
   if (changed) saveSim(list);
-  // 渲染当前币种的所有活跃交易(策略仓+冲动仓可并存)
+  // 渲染当前币种的所有活跃交易(支持多个冲动仓并存, 最多显示5个)
   const actives = list.filter(t => t.coin === coin && (t.status === "waiting" || t.status === "open"));
-  renderSimActive(actives);
+  renderSimActive(actives.slice(0, 5));
   renderSimHistory(list);
 }
 
@@ -1219,17 +1212,11 @@ function renderOneActive(t) {
 
 // ==================== 冲动开仓: 不等信号立即成交 ====================
 function openImpulse(dir) {
-  // 直接读取计算器卡片的保证金和杠杆(不再有歧义的回退逻辑)
+  // 直接读取计算器卡片的保证金和杠杆
   const m = Math.max(1, +$("margin").value || 100);
   const lev = Math.min(125, Math.max(1, +$("lev").value || 10));
   if (price <= 0) return;
   const list = loadSim();
-  // 冲动仓只检查冲动仓(策略仓可以并存)
-  const hasImpulse = list.some(t => t.coin === coin && t.tradeType === "impulse" && t.status === "open");
-  if (hasImpulse) {
-    alert(`已有 ${META[coin].sym} 的冲动仓在运行`);
-    return;
-  }
   const isLong = dir === "long";
   const imr = 1 / lev, mmr = 0.005;
   const score = getCurrentSignalScore();
@@ -1297,7 +1284,7 @@ function renderSimHistory(list) {
 
   // 逐笔记录(最近10笔, 冲动标红)
   $("simHistory").innerHTML =
-    closed.slice(-10).reverse().map(t => {
+    closed.slice(-15).reverse().map(t => {
       const pos = t.pnl > 0;
       const typeTag = t.tradeType === "impulse" ? ' <span style="color:var(--up);font-size:9px">🔥</span>' : "";
       return `<div class="sim-h-row"${t.tradeType === "impulse" ? ' style="background:rgba(229,69,69,0.04)"' : ""}>
