@@ -75,9 +75,21 @@
       </div>
       <div id="btResult" class="bt-result hidden"></div>
       <div id="btTrades" class="bt-trades hidden"></div>
+      <button id="simStartBtn" class="sim-start hidden">🚀 开始模拟交易（验证此策略）</button>
+      <div id="simForm" class="sim-form hidden">
+        <div class="sim-form-title">⚙️ 模拟交易参数</div>
+        <div class="sim-form-grid">
+          <label>保证金(U)<input id="simMargin" type="number" value="100" min="10"></label>
+          <label>杠杆<input id="simLev" type="number" value="10" min="1" max="125">x</label>
+        </div>
+        <div id="simPreview" class="sim-preview"></div>
+        <button id="simConfirm" class="sim-confirm">✅ 确认开仓（等信号触发）</button>
+      </div>
+      <div id="simActive" class="sim-active hidden"></div>
     </div>
     <div class="card forward-card">
       <div class="card-title">⏱️ 前向验证 <span class="sub">实时信号记录 → 自动验证</span> <span id="fwdStats" class="sub"></span></div>
+      <div id="simHistory" class="sim-history"></div>
       <div id="fwdList" class="fwd-list"><span class="loading">等待信号触发…</span></div>
       <div class="fwd-note">当信号得分≥50时自动记录预测（做多方向），价格触及止盈(+2%)或止损(-1%)后自动验证。记录保存在浏览器本地，刷新不丢失。</div>
     </div>

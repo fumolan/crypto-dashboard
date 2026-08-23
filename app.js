@@ -156,6 +156,7 @@ function renderAll(tickerMap) {
   renderTrades();
   renderWalls();
   updateCalc();
+  checkSimTrades();
 }
 
 // ==================== 主流币价格条 ====================
@@ -710,6 +711,7 @@ async function runBacktest(dir) {
     el.innerHTML = `<span style="color:var(--up)">失败: ${e.message}</span>`;
   } finally {
     btn.disabled = false;
+    showSimButton(dir);
   }
 }
 
@@ -812,6 +814,242 @@ function renderForward(list) {
       <span class="fwd-pl ${p.pl >= 0 ? "win" : "loss"}">${plStr}</span>
     </div>`;
   }).join("");
+}
+
+// ==================== 模拟交易: 策略验证系统 ====================
+const SIM_KEY = "crypto_sim_trades_v1";
+const SIM_TP = 0.02, SIM_SL = 0.01;    // 止盈2% 止损1%
+
+let simDirection = "long";   // 当前要验证的方向
+
+function loadSim() {
+  try { return JSON.parse(localStorage.getItem(SIM_KEY)) || []; }
+  catch (e) { return []; }
+}
+function saveSim(list) {
+  try { localStorage.setItem(SIM_KEY, JSON.stringify(list)); } catch (e) {}
+}
+
+// 显示"开始模拟交易"按钮(回测完成后调用)
+function showSimButton(dir) {
+  simDirection = dir;
+  $("simStartBtn").classList.remove("hidden");
+  $("simForm").classList.add("hidden");
+}
+
+// 点击"开始模拟交易" → 显示参数表单
+$("simStartBtn").addEventListener("click", () => {
+  $("simStartBtn").classList.add("hidden");
+  $("simForm").classList.remove("hidden");
+  updateSimPreview();
+});
+
+// 输入保证金/杠杆时实时预览
+["simMargin", "simLev"].forEach(id =>
+  $(id).addEventListener("input", updateSimPreview));
+
+function updateSimPreview() {
+  const m = +$("simMargin").value || 100;
+  const lev = Math.min(125, Math.max(1, +$("simLev").value || 10));
+  const mmr = 0.005;
+  const imr = 1 / lev;
+  const pos = m * lev;
+  const qty = pos / (price || 1);
+  const liqLong = price * (1 - imr + mmr);
+  const liqShort = price * (1 + imr - mmr);
+  const isLong = simDirection === "long";
+  const liq = isLong ? liqLong : liqShort;
+  const tp = isLong ? price * (1 + SIM_TP) : price * (1 - SIM_TP);
+  const sl = isLong ? price * (1 - SIM_SL) : price * (1 + SIM_SL);
+  const tpProfit = pos * SIM_TP;
+  const slLoss = pos * SIM_SL;
+  $("simPreview").innerHTML = `
+    <b>${isLong ? "📈 做多" : "📉 做空"} ${META[coin].sym}</b> | 仓位 <b>$${pos.toLocaleString()}</b> (${qty < 1 ? qty.toFixed(4) : qty.toFixed(2)} ${META[coin].sym})<br>
+    止盈: <b style="color:var(--down)">${fmtP(tp)}</b> (+$${tpProfit.toFixed(2)}) |
+    止损: <b style="color:var(--up)">${fmtP(sl)}</b> (-$${slLoss.toFixed(2)})<br>
+    爆仓价: <b style="color:#ff4444">${fmtP(liq)}</b> (亏光保证金$${m})`;
+}
+
+// 确认开仓 → 创建等待信号的模拟交易
+$("simConfirm").addEventListener("click", () => {
+  const m = +$("simMargin").value || 100;
+  const lev = Math.min(125, Math.max(1, +$("simLev").value || 10));
+  const list = loadSim();
+  // 同币种同方向只能有一个未完结的模拟
+  const hasActive = list.some(t => t.coin === coin && t.status !== "win" && t.status !== "loss" && t.status !== "liquidated");
+  if (hasActive) {
+    alert(`已有 ${META[coin].sym} 的未完结模拟交易，等它结束再开新的`);
+    return;
+  }
+  list.push({
+    id: Date.now(),
+    direction: simDirection,
+    coin,
+    sym: META[coin].sym,
+    margin: m,
+    leverage: lev,
+    status: "waiting",
+    entryPrice: null, entryTime: null,
+    tpPrice: null, slPrice: null, liqPrice: null,
+    exitPrice: null, exitTime: null,
+    pnl: null, roi: null,
+  });
+  saveSim(list);
+  $("simForm").classList.add("hidden");
+  checkSimTrades();
+});
+
+// 每次刷新调用: 管理模拟交易生命周期
+function checkSimTrades() {
+  const list = loadSim();
+  if (!list.length) { renderSimActive(null); renderSimHistory(list); return; }
+  let changed = false;
+
+  list.forEach(t => {
+    if (t.coin !== coin || !price) return;
+
+    // 等待中: 检查信号是否触发
+    if (t.status === "waiting") {
+      const score = getCurrentSignalScore();
+      if (score >= 50) {
+        const isLong = t.direction === "long";
+        const imr = 1 / t.leverage;
+        const mmr = 0.005;
+        t.entryPrice = price;
+        t.entryTime = Date.now();
+        t.tpPrice = isLong ? price * (1 + SIM_TP) : price * (1 - SIM_TP);
+        t.slPrice = isLong ? price * (1 - SIM_SL) : price * (1 + SIM_SL);
+        t.liqPrice = isLong ? price * (1 - imr + mmr) : price * (1 + imr - mmr);
+        t.status = "open";
+        changed = true;
+      }
+      return;
+    }
+
+    // 持仓中: 检查止盈/止损/爆仓
+    if (t.status === "open" && klines5m.length > 1) {
+      const done = klines5m.slice(0, -1);
+      const isLong = t.direction === "long";
+      for (const k of done) {
+        if (+k[0] < t.entryTime) continue;
+        const h = +k[2], l = +k[3];
+        // 爆仓优先检查(最大风险)
+        if (isLong && l <= t.liqPrice) {
+          t.status = "liquidated"; t.exitPrice = t.liqPrice; t.pnl = -t.margin; t.roi = -100;
+          t.exitTime = +k[0]; changed = true; break;
+        }
+        if (!isLong && h >= t.liqPrice) {
+          t.status = "liquidated"; t.exitPrice = t.liqPrice; t.pnl = -t.margin; t.roi = -100;
+          t.exitTime = +k[0]; changed = true; break;
+        }
+        // 止损
+        if (isLong && l <= t.slPrice) {
+          t.status = "loss"; t.exitPrice = t.slPrice;
+          t.pnl = -(t.margin * t.leverage * SIM_SL); t.roi = -SIM_SL * t.leverage * 100;
+          t.exitTime = +k[0]; changed = true; break;
+        }
+        if (!isLong && h >= t.slPrice) {
+          t.status = "loss"; t.exitPrice = t.slPrice;
+          t.pnl = -(t.margin * t.leverage * SIM_SL); t.roi = -SIM_SL * t.leverage * 100;
+          t.exitTime = +k[0]; changed = true; break;
+        }
+        // 止盈
+        if (isLong && h >= t.tpPrice) {
+          t.status = "win"; t.exitPrice = t.tpPrice;
+          t.pnl = t.margin * t.leverage * SIM_TP; t.roi = SIM_TP * t.leverage * 100;
+          t.exitTime = +k[0]; changed = true; break;
+        }
+        if (!isLong && l <= t.tpPrice) {
+          t.status = "win"; t.exitPrice = t.tpPrice;
+          t.pnl = t.margin * t.leverage * SIM_TP; t.roi = SIM_TP * t.leverage * 100;
+          t.exitTime = +k[0]; changed = true; break;
+        }
+      }
+      // 超时(24小时)
+      if (t.status === "open" && Date.now() - t.entryTime > 86400000) {
+        const isLong2 = t.direction === "long";
+        const pl = isLong2 ? (price / t.entryPrice - 1) : (1 - price / t.entryPrice);
+        t.status = "timeout"; t.exitPrice = price;
+        t.pnl = t.margin * t.leverage * pl; t.roi = pl * t.leverage * 100;
+        t.exitTime = Date.now(); changed = true;
+      }
+    }
+  });
+
+  if (changed) saveSim(list);
+  // 渲染当前币种的活跃交易和全部历史
+  const active = list.find(t => t.coin === coin && (t.status === "waiting" || t.status === "open"));
+  renderSimActive(active);
+  renderSimHistory(list);
+}
+
+function getCurrentSignalScore() {
+  const el = $("signalScore");
+  const m = el.textContent.match(/(\d+)\/100/);
+  return m ? parseInt(m[1]) : 0;
+}
+
+function renderSimActive(t) {
+  const el = $("simActive");
+  if (!t) { el.classList.add("hidden"); return; }
+  el.classList.remove("hidden");
+  const isLong = t.direction === "long";
+
+  if (t.status === "waiting") {
+    el.innerHTML = `
+      <div class="sa-status waiting">⏳ 等待信号触发 (得分≥50时自动开仓)</div>
+      <div class="sa-row"><span class="l">方向</span><span class="v">${isLong ? "📈 做多" : "📉 做空"} ${t.sym}</span></div>
+      <div class="sa-row"><span class="l">保证金</span><span class="v">$${t.margin} × ${t.leverage}x = $${(t.margin * t.leverage).toLocaleString()}</span></div>
+      <div class="sa-row"><span class="l">当前得分</span><span class="v">${getCurrentSignalScore()}/100</span></div>`;
+    return;
+  }
+
+  // 持仓中
+  const qty = t.margin * t.leverage / t.entryPrice;
+  const curPct = isLong ? (price / t.entryPrice - 1) : (1 - price / t.entryPrice);
+  const uPnl = t.margin * t.leverage * curPct;
+  const uRoi = curPct * t.leverage * 100;
+  const pnlCls = uPnl >= 0 ? "pos" : "neg";
+  const distTP = Math.abs((t.tpPrice / price - 1) * 100).toFixed(2);
+  const distSL = Math.abs((t.slPrice / price - 1) * 100).toFixed(2);
+  const distLiq = Math.abs((t.liqPrice / price - 1) * 100).toFixed(2);
+
+  el.innerHTML = `
+    <div class="sa-status open">🟢 持仓中: ${isLong ? "做多" : "做空"} ${t.sym} ${t.leverage}x</div>
+    <div class="sa-row"><span class="l">入场</span><span class="v">${fmtP(t.entryPrice)} (${new Date(t.entryTime).toLocaleTimeString("zh-CN", {hour12:false})})</span></div>
+    <div class="sa-row"><span class="l">当前价</span><span class="v">${fmtP(price)}</span></div>
+    <div class="sa-pnl ${pnlCls}">${uPnl >= 0 ? "+" : ""}$${uPnl.toFixed(2)} (${uRoi >= 0 ? "+" : ""}${uRoi.toFixed(1)}%)</div>
+    <div class="sa-row"><span class="l">止盈</span><span class="v" style="color:var(--down)">${fmtP(t.tpPrice)} (距${distTP}%)</span></div>
+    <div class="sa-row"><span class="l">止损</span><span class="v" style="color:var(--up)">${fmtP(t.slPrice)} (距${distSL}%)</span></div>
+    <div class="sa-row"><span class="l">爆仓</span><span class="v" style="color:#ff4444">${fmtP(t.liqPrice)} (距${distLiq}%)</span></div>
+    <div class="sa-row"><span class="l">数量</span><span class="v">${qty < 1 ? qty.toFixed(4) : qty.toFixed(2)} ${t.sym}</span></div>`;
+}
+
+function renderSimHistory(list) {
+  const closed = list.filter(t => ["win", "loss", "liquidated", "timeout"].includes(t.status));
+  if (!closed.length) { $("simHistory").innerHTML = ""; return; }
+  const wins = closed.filter(t => t.pnl > 0).length;
+  const total = closed.length;
+  const wr = (wins / total * 100).toFixed(1);
+  const totalPnl = closed.reduce((s, t) => s + (t.pnl || 0), 0);
+  const fmtT = (ts) => new Date(ts).toLocaleString("zh-CN",
+    { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+
+  $("simHistory").innerHTML = `
+    <div style="font-size:11px;font-weight:700;color:var(--accent);margin-bottom:4px">
+      📊 模拟交易历史: ${total}笔 | 胜率${wr}% | 总盈亏${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(2)}
+    </div>` +
+    closed.slice(-8).reverse().map(t => {
+      const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时" };
+      const pos = t.pnl > 0;
+      return `<div class="sim-h-row">
+        <span class="sh-time">${fmtT(t.entryTime)}</span>
+        <span class="sh-sym">${t.sym}${t.direction === "long" ? "↑" : "↓"}</span>
+        <span class="sh-detail">${fmtP(t.entryPrice)}→${fmtP(t.exitPrice)} ${t.margin}U×${t.leverage}x</span>
+        <span class="sh-result ${pos ? "pos" : "neg"}" style="color:${pos ? "var(--down)" : "var(--up)"}">${resMap[t.status]}</span>
+        <span class="sh-pnl ${pos ? "pos" : "neg"}">${pos ? "+" : ""}$${t.pnl.toFixed(2)}</span>
+      </div>`;
+    }).join("");
 }
 
 // ==================== 事件 & 初始化 ====================

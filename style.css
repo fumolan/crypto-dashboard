@@ -249,6 +249,101 @@ body {
 }
 .bt-strategy b { color: var(--accent); }
 
+/* ---------- 模拟交易 ---------- */
+.sim-start {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sim-start:hover { box-shadow: 0 2px 12px rgba(168,85,247,0.4); }
+
+.sim-form {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+}
+.sim-form-title { font-size: 12px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+.sim-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sim-form-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.sim-form-grid input {
+  background: var(--card); color: var(--text);
+  border: 1px solid var(--border); border-radius: 5px;
+  padding: 6px 8px; font-size: 14px;
+}
+.sim-preview {
+  margin-top: 8px;
+  padding: 6px 8px;
+  background: rgba(240,185,11,0.05);
+  border-radius: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.sim-preview b { color: var(--text); }
+.sim-confirm {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px;
+  background: rgba(36,178,140,0.15);
+  border: 1px solid var(--down);
+  border-radius: 6px;
+  color: var(--down);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sim-confirm:hover { background: rgba(36,178,140,0.25); }
+
+.sim-active {
+  margin-top: 8px;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 12px;
+}
+.sa-status { font-size: 13px; font-weight: 800; margin-bottom: 6px; }
+.sa-status.open { color: var(--down); }
+.sa-status.win { color: var(--down); }
+.sa-status.loss { color: var(--up); }
+.sa-status.liquidated { color: #ff4444; }
+.sa-status.waiting { color: var(--accent); }
+.sa-row { display: flex; justify-content: space-between; padding: 2px 0; }
+.sa-row .l { color: var(--muted); font-size: 11px; }
+.sa-row .v { font-weight: 700; font-variant-numeric: tabular-nums; }
+.sa-pnl { font-size: 18px; font-weight: 800; text-align: center; padding: 6px 0; margin-top: 4px; border-radius: 5px; }
+.sa-pnl.pos { color: var(--down); background: rgba(36,178,140,0.1); }
+.sa-pnl.neg { color: var(--up); background: rgba(229,69,69,0.1); }
+
+.sim-history { max-height: 200px; overflow-y: auto; margin-bottom: 6px; }
+.sim-h-row {
+  display: flex;
+  gap: 6px;
+  padding: 3px 6px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid rgba(42,50,66,0.2);
+  align-items: center;
+}
+.sh-time { width: 90px; color: var(--muted); font-size: 10px; }
+.sh-sym { width: 40px; font-weight: 700; }
+.sh-detail { flex: 1; color: var(--muted); font-size: 10px; }
+.sh-result { width: 55px; text-align: center; font-weight: 700; font-size: 10px; border-radius: 3px; }
+.sh-pnl { width: 65px; text-align: right; font-weight: 700; }
+.sh-pnl.pos { color: var(--down); }
+.sh-pnl.neg { color: var(--up); }
+
 /* ---------- 前向验证 ---------- */
 .forward-card { grid-column: span 1; }
 .fwd-list { max-height: 220px; overflow-y: auto; }
