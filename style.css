@@ -313,6 +313,7 @@ body {
 .wall-h.sell { color: var(--up); }
 .wall-h.buy { color: var(--down); }
 .wall-h.eaten { color: var(--accent); border-top: 1px dashed var(--border); margin-top: 6px; padding-top: 6px; }
+.wall-h.eaten { color: var(--accent); border-top: 1px dashed var(--border); margin-top: 6px; padding-top: 6px; }
 
 .w-row {
   display: grid;

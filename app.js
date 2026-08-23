@@ -545,8 +545,30 @@ function renderWalls() {
     html += bigBids.map(x => wallRow(x, true)).join("");
   }
 
-  let eaten = 0, pulled = 0;
-  wallHistory.forEach(w => { if (w.status === "eaten") eaten++; else if (w.status === "pulled") pulled++; });
+  // 被吃的墙(价格到达并消耗 = 真实成交)
+  const eatenWalls = [];
+  wallHistory.forEach(w => { if (w.status === "eaten") eatenWalls.push(w); });
+  if (eatenWalls.length) {
+    eatenWalls.sort((a, b) => b.maxSize - a.maxSize);
+    html += `<div class="wall-h eaten">🍽️ 被吃的墙 <span class="sub">(价格到达并消耗 = 真实)</span></div>`;
+    html += eatenWalls.slice(0, 5).map(w => {
+      const age = Math.round((w.disappearedAt - w.firstSeen) / 1000);
+      const ageStr = age > 60 ? `${Math.floor(age / 60)}分${age % 60}秒` : `${age}秒`;
+      const hm = new Date(w.disappearedAt).toLocaleTimeString("zh-CN",
+        { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      return `<div class="w-row" style="background:rgba(36,178,140,0.05)">
+        <span class="w-price">${fmtP(w.price)}</span>
+        <span style="font-weight:700;font-size:11px;color:${w.isBuy ? "var(--up)" : "var(--down)"}">${w.isBuy ? "买墙" : "卖墙"}</span>
+        <span class="w-qty">${fmtQ(w.maxSize)}</span>
+        <span class="w-dist">${hm}</span>
+        <span class="w-age">存活${ageStr}</span>
+        <span class="w-cred cred-high">🟢真实</span>
+      </div>`;
+    }).join("");
+  }
+
+  let eaten = eatenWalls.length, pulled = 0;
+  wallHistory.forEach(w => { if (w.status === "pulled") pulled++; });
   if (wallHistory.size > 0) {
     html += `<div class="wall-stats">
       <span>追踪${wallHistory.size}墙</span>
