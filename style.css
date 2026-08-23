@@ -108,8 +108,9 @@ body {
 /* ---------- 网格布局 ---------- */
 .grid { display: grid; gap: 10px; margin-bottom: 10px; }
 .charts-row { grid-template-columns: 1fr 1fr 1fr; }
-.analysis-row { grid-template-columns: 1fr 1.2fr 1fr; }
+.analysis-row { grid-template-columns: 1.3fr 1fr 1fr; align-items: start; }
 .data-row { grid-template-columns: 1fr 1fr; }
+.grid > .card { min-width: 0; }
 
 @media (max-width: 1200px) {
   .charts-row { grid-template-columns: 1fr; }
@@ -150,76 +151,79 @@ body {
 
 /* ---------- 信号计算器 ---------- */
 .score-gauge {
-  margin-bottom: 10px;
-  padding: 8px;
+  margin-bottom: 6px;
+  padding: 5px 8px;
   background: var(--bg);
-  border-radius: 8px;
+  border-radius: 6px;
   text-align: center;
 }
 .sg-score {
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .sg-score.high { color: var(--down); }
 .sg-score.mid { color: var(--accent); }
 .sg-score.low { color: var(--up); }
 .sg-bar {
-  height: 12px;
+  height: 8px;
   background: rgba(42,50,66,0.5);
-  border-radius: 6px;
+  border-radius: 4px;
   overflow: hidden;
 }
 .sg-fill {
   height: 100%;
-  border-radius: 6px;
+  border-radius: 4px;
   transition: width 0.5s, background 0.3s;
 }
 .sg-ticks {
   display: flex;
   justify-content: space-between;
-  font-size: 9px;
+  font-size: 8px;
   color: var(--muted);
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .sig-calc {
-  padding: 5px 8px;
+  padding: 3px 6px;
   background: var(--bg);
-  border-radius: 6px;
-  margin-bottom: 4px;
+  border-radius: 4px;
+  margin-bottom: 3px;
 }
 .sig-calc.passed { border-left: 3px solid var(--down); }
 .sig-calc.failed { border-left: 3px solid var(--border); }
 .sc-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11px;
+  flex-wrap: nowrap;
 }
-.sc-num { color: var(--muted); font-size: 10px; width: 14px; }
-.sc-name { font-weight: 700; width: 60px; }
-.sc-pass { font-size: 10px; font-weight: 600; margin-left: auto; }
+.sc-num { color: var(--muted); font-size: 9px; min-width: 12px; }
+.sc-name { font-weight: 700; min-width: 52px; white-space: nowrap; }
+.sc-pass { font-size: 9px; font-weight: 600; margin-left: auto; white-space: nowrap; }
 .sc-pass.on { color: var(--down); }
 .sc-pass.off { color: var(--muted); }
-.sc-pts { font-weight: 800; font-variant-numeric: tabular-nums; width: 40px; text-align: right; }
+.sc-pts { font-weight: 800; font-variant-numeric: tabular-nums; min-width: 36px; text-align: right; white-space: nowrap; }
 .sc-pts.on { color: var(--down); }
 .sc-pts.off { color: var(--muted); }
 .sc-detail {
   display: flex;
   justify-content: space-between;
-  font-size: 10px;
+  font-size: 9px;
   color: var(--muted);
-  margin-top: 3px;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
 }
 .sc-val { color: var(--text); font-weight: 600; }
 .sc-thresh { color: var(--muted); }
 .sc-bar {
-  height: 5px;
+  height: 4px;
   background: rgba(42,50,66,0.4);
   border-radius: 2px;
-  margin-top: 3px;
+  margin-top: 2px;
   overflow: hidden;
 }
 .sc-bar-fill {
@@ -233,27 +237,6 @@ body {
 
 /* ---------- 信号面板(旧) ---------- */
 .signal-list { display: flex; flex-direction: column; gap: 4px; }
-.sig-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 8px;
-  background: var(--bg);
-  border-radius: 5px;
-  font-size: 12px;
-}
-.sig-icon { width: 18px; text-align: center; }
-.sig-name { width: 70px; color: var(--muted); font-size: 11px; }
-.sig-detail { flex: 1; font-size: 11px; }
-.sig-pts { font-weight: 700; }
-.sig-pts.on { color: var(--down); }
-.sig-pts.off { color: var(--muted); }
-
-.score { margin-left: auto; font-size: 18px; font-weight: 800; }
-.score.high { color: var(--down); }
-.score.mid { color: var(--accent); }
-.score.low { color: var(--up); }
-
 .verdict {
   margin-top: 8px;
   padding: 6px 10px;
