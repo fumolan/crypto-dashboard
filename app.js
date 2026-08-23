@@ -1196,7 +1196,11 @@ function renderOneActive(t) {
       <div class="sa-row"><span class="l">类型</span><span class="v">${t.tradeType === "impulse" ? "🔥 冲动" : "📊 策略"}</span></div>
       <div class="sa-row"><span class="l">方向</span><span class="v">${isLong ? "📈 做多" : "📉 做空"} ${t.sym}</span></div>
       <div class="sa-row"><span class="l">保证金</span><span class="v">$${t.margin} × ${t.leverage}x = $${(t.margin * t.leverage).toLocaleString()}</span></div>
-      <div class="sa-row"><span class="l">当前得分</span><span class="v">多${longScore} / 空${shortScore} (需${t.direction === "long" ? "多" : "空"}≥50)</span></div>`;
+      <div class="sa-row"><span class="l">当前得分</span><span class="v">多${longScore} / 空${shortScore} (需${t.direction === "long" ? "多" : "空"}≥50)</span></div>
+      <div class="sa-actions">
+        <button class="sa-edit" onclick="editSimTrade(${t.id})">✏️ 改杠杆/保证金</button>
+        <button class="sa-del" onclick="deleteSimTrade(${t.id})">🗑️ 删除</button>
+      </div>`;
   }
 
   const typeTag = t.tradeType === "impulse" ? "🔥冲动" : "📊策略";
@@ -1217,7 +1221,38 @@ function renderOneActive(t) {
     <div class="sa-row"><span class="l">止盈</span><span class="v" style="color:var(--down)">${fmtP(t.tpPrice)} (距${distTP}%)</span></div>
     <div class="sa-row"><span class="l">止损</span><span class="v" style="color:var(--up)">${fmtP(t.slPrice)} (距${distSL}%)</span></div>
     <div class="sa-row"><span class="l">爆仓</span><span class="v" style="color:#ff4444">${fmtP(t.liqPrice)} (距${distLiq}%)</span></div>
-    <div class="sa-row"><span class="l">数量</span><span class="v">${qty < 1 ? qty.toFixed(4) : qty.toFixed(2)} ${t.sym}</span></div>`;
+    <div class="sa-row"><span class="l">数量</span><span class="v">${qty < 1 ? qty.toFixed(4) : qty.toFixed(2)} ${t.sym}</span></div>
+    <div class="sa-actions">
+      <button class="sa-edit" onclick="editSimTrade(${t.id})">✏️ 改杠杆/保证金</button>
+      <button class="sa-del" onclick="deleteSimTrade(${t.id})">🗑️ 删除</button>
+    </div>`;
+}
+
+// 删除模拟交易
+function deleteSimTrade(id) {
+  let list = loadSim();
+  list = list.filter(t => t.id !== id);
+  saveSim(list);
+  checkSimTrades();
+}
+
+// 修改杠杆/保证金
+function editSimTrade(id) {
+  const list = loadSim();
+  const t = list.find(x => x.id === id);
+  if (!t) return;
+  const newM = prompt(`保证金 (当前: ${t.margin}U)`, t.margin);
+  if (newM === null) return;
+  const newLev = prompt(`杠杆 (当前: ${t.leverage}x)`, t.leverage);
+  if (newLev === null) return;
+  t.margin = Math.max(1, +newM || t.margin);
+  t.leverage = Math.min(125, Math.max(1, +newLev || t.leverage));
+  // 重算爆仓价(止盈止损按开仓价百分比, 不变)
+  const imr = 1 / t.leverage, mmr = 0.005;
+  const isLong = t.direction === "long";
+  t.liqPrice = isLong ? t.entryPrice * (1 - imr + mmr) : t.entryPrice * (1 + imr - mmr);
+  saveSim(list);
+  checkSimTrades();
 }
 
 // ==================== 冲动开仓: 不等信号立即成交 ====================

@@ -821,3 +821,24 @@ footer {
   letter-spacing: 2px;
   text-shadow: 0 0 12px rgba(240, 185, 11, 0.4);
 }
+
+.sa-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+.sa-edit, .sa-del {
+  flex: 1;
+  padding: 4px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+}
+.sa-edit { color: var(--accent); }
+.sa-del { color: var(--up); }
+.sa-edit:hover { border-color: var(--accent); }
+.sa-del:hover { border-color: var(--up); background: rgba(229,69,69,0.08); }
