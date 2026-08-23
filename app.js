@@ -1396,7 +1396,11 @@ function getCurrentSignalScore(direction) {
 
 function renderSimActive(trades) {
   const el = $("simActive");
-  if (!trades || !trades.length) { el.classList.add("hidden"); return; }
+  if (!trades || !trades.length) {
+    el.classList.add("hidden");
+    el.innerHTML = "";   // 清空残留, 平仓后绝不再显示持仓内容
+    return;
+  }
   el.classList.remove("hidden");
   el.innerHTML = trades.map(t => renderOneActive(t)).join('<div style="border-top:1px dashed var(--border);margin:6px 0"></div>');
 }
