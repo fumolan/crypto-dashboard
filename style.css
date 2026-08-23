@@ -813,3 +813,11 @@ footer {
   color: var(--text);
   line-height: 1.5;
 }
+
+.motto {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-shadow: 0 0 12px rgba(240, 185, 11, 0.4);
+}
