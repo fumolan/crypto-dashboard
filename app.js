@@ -1278,16 +1278,20 @@ function closeSimTrade(id) {
   const list = loadSim();
   const t = list.find(x => x.id === id);
   if (!t || t.status !== "open") return;
+  if (!price || price <= 0) { alert("价格未加载"); return; }
   const isLong = t.direction === "long";
-  const pl = isLong ? (price / t.entryPrice - 1) : (1 - price / t.entryPrice);
-  t.status = pl >= 0 ? "win" : "loss";
-  t.exitPrice = price;
+  const exitP = price;
+  const pl = isLong ? (exitP / t.entryPrice - 1) : (1 - exitP / t.entryPrice);
+  t.status = "manual";
+  t.exitPrice = exitP;
   t.exitTime = Date.now();
-  t.pnl = t.margin * t.leverage * pl;
-  t.roi = pl * t.leverage * 100;
-  t.manualClose = true;
+  t.pnl = +(t.margin * t.leverage * pl).toFixed(2);
+  t.roi = +(pl * t.leverage * 100).toFixed(1);
   saveSim(list);
-  checkSimTrades();
+  // 直接渲染, 不走checkSimTrades避免被覆盖
+  const actives = list.filter(x => x.coin === coin && (x.status === "waiting" || x.status === "open"));
+  renderSimActive(actives);
+  renderSimHistory(list);
 }
 
 // 删除模拟交易
@@ -1352,12 +1356,12 @@ $("impulseLong").addEventListener("click", () => openImpulse("long"));
 $("impulseShort").addEventListener("click", () => openImpulse("short"));
 
 function renderSimHistory(list) {
-  const closed = list.filter(t => ["win", "loss", "liquidated", "timeout"].includes(t.status));
+  const closed = list.filter(t => ["win", "loss", "liquidated", "timeout", "manual"].includes(t.status));
   if (!closed.length) { $("simHistory").innerHTML = "<span class='loading'>暂无已完结交易</span>"; $("simCompare").innerHTML = ""; return; }
 
   const fmtT = (ts) => new Date(ts).toLocaleString("zh-CN",
     { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
-  const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时" };
+  const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时", manual: "💰手动平仓" };
 
   // 分类统计
   const strat = closed.filter(t => t.tradeType !== "impulse");
@@ -1406,7 +1410,7 @@ function renderHistRow(t) {
       const typeTag = t.tradeType === "impulse" ? ' <span style="color:var(--up);font-size:9px">🔥</span>' : "";
       const fmtTH = (ts) => new Date(ts).toLocaleString("zh-CN",
         { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
-      const resMapH = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时" };
+      const resMapH = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时", manual: "💰手动平仓" };
       return `<div class="sim-h-row"${t.tradeType === "impulse" ? ' style="background:rgba(229,69,69,0.04)"' : ""}>
         <span class="sh-time">${fmtTH(t.entryTime)}</span>
         <span class="sh-sym">${t.direction === "long" ? "↑" : "↓"}${typeTag}</span>
@@ -1425,7 +1429,7 @@ function showTradeDetail(id) {
   const isLong = t.direction === "long";
   const pos = t.pnl > 0;
   const typeLabel = t.tradeType === "impulse" ? "🔥 冲动开仓" : "📊 策略开仓";
-  const resMap = { win: "✅ 止盈出场", loss: "❌ 止损出场", liquidated: "💥 爆仓（保证金归零）", timeout: "⏰ 超时平仓" };
+  const resMap = { win: "✅ 止盈出场", loss: "❌ 止损出场", liquidated: "💥 爆仓（保证金归零）", timeout: "⏰ 超时平仓", manual: "💰 手动平仓" };
   const fmtDT = (ts) => ts ? new Date(ts).toLocaleString("zh-CN",
     { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "--";
   const holdMin = t.entryTime && t.exitTime ? Math.round((t.exitTime - t.entryTime) / 60000) : 0;
@@ -1471,12 +1475,12 @@ $("viewReportBtn").addEventListener("click", () => {
   const fmtDT = (ts) => ts ? new Date(ts).toLocaleString("zh-CN",
     { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "--";
 
-  const closed = list.filter(t => ["win", "loss", "liquidated", "timeout"].includes(t.status));
+  const closed = list.filter(t => ["win", "loss", "liquidated", "timeout", "manual"].includes(t.status));
   const strat = closed.filter(t => t.tradeType !== "impulse");
   const imp = closed.filter(t => t.tradeType === "impulse");
   const totalPnl = closed.reduce((s, t) => s + (t.pnl || 0), 0);
   const wins = closed.filter(t => t.pnl > 0).length;
-  const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时", open: "🟢持仓中" };
+  const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时", manual: "💰平仓", open: "🟢持仓中" };
 
   let html = `<div style="text-align:center;padding:10px;border-radius:8px;margin-bottom:10px;background:var(--bg)">
     <div style="font-size:11px;color:var(--muted)">总交易 ${closed.length}笔 · 胜率${closed.length ? (wins / closed.length * 100).toFixed(1) : 0}%</div>
@@ -1562,12 +1566,12 @@ $("exportBtn").addEventListener("click", () => {
   Object.entries(byCoin).forEach(([sym, trades]) => {
     // 最新在前
     trades.sort((a, b) => (b.entryTime || b.id) - (a.entryTime || a.id));
-    const closed = trades.filter(t => ["win", "loss", "liquidated", "timeout"].includes(t.status));
+    const closed = trades.filter(t => ["win", "loss", "liquidated", "timeout", "manual"].includes(t.status));
     const strat = closed.filter(t => t.tradeType !== "impulse");
     const imp = closed.filter(t => t.tradeType === "impulse");
     const totalPnl = closed.reduce((s, t) => s + (t.pnl || 0), 0);
     const wins = closed.filter(t => t.pnl > 0).length;
-    const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时", open: "🟢持仓中", waiting: "⏳等待中" };
+    const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时", manual: "💰平仓", open: "🟢持仓中", waiting: "⏳等待中" };
 
     let md = `# ${trades[0].sym} 模拟交易记录\n\n`;
     md += `> 导出时间: ${fmtDT(now.getTime())}\n`;
