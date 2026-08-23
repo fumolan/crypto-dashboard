@@ -367,9 +367,6 @@ function renderSignals(tickerMap) {
   if (total >= 75) { v.textContent = "🟢 可交易 | 信号共振"; v.className = "verdict go"; }
   else if (total >= 50) { v.textContent = `🟡 观望 | 需${75 - total}分`; v.className = "verdict wait"; }
   else { v.textContent = "🔴 不交易"; v.className = "verdict no"; }
-
-  // 前向验证: 记录信号并检查历史预测
-  checkForward(total);
 }
 
 // ==================== 趋势解读 ====================
@@ -713,107 +710,6 @@ async function runBacktest(dir) {
     btn.disabled = false;
     showSimButton(dir);
   }
-}
-
-// ==================== 前向验证: 实时信号记录 → 自动验证 ====================
-const FWD_KEY = "crypto_fwd_v1";
-const FWD_TP = 0.02, FWD_SL = 0.01, FWD_TIMEOUT = 24 * 3600 * 1000; // 24小时
-
-function loadFwd() {
-  try { return JSON.parse(localStorage.getItem(FWD_KEY)) || []; }
-  catch (e) { return []; }
-}
-function saveFwd(list) {
-  try { localStorage.setItem(FWD_KEY, JSON.stringify(list)); } catch (e) {}
-}
-
-function checkForward(signalScore) {
-  const list = loadFwd();
-  const now = Date.now();
-
-  // ① 检查已有预测是否可以验证
-  let updated = false;
-  list.forEach(p => {
-    if (p.status !== "pending") return;
-    if (p.coin !== coin) return;
-    // 用5分钟K线的高低点检查是否触及TP/SL
-    if (klines5m.length > 1) {
-      const done = klines5m.slice(0, -1);
-      done.forEach(k => {
-        if (p.status !== "pending") return;
-        const ts = +k[0];
-        if (ts < p.timestamp) return;
-        const h = +k[2], l = +k[3];
-        if (h >= p.tp) {
-          p.status = "win"; p.pl = FWD_TP * 100; p.resultTime = ts; updated = true;
-        } else if (l <= p.sl) {
-          p.status = "loss"; p.pl = -FWD_SL * 100; p.resultTime = ts; updated = true;
-        }
-      });
-    }
-    // 超时检查
-    if (p.status === "pending" && now - p.timestamp > FWD_TIMEOUT) {
-      p.status = "timeout";
-      p.pl = price > 0 ? ((price / p.entry - 1) * 100) : 0;
-      p.resultTime = now; updated = true;
-    }
-  });
-
-  // ② 记录新信号(得分≥50 且该币无未完结预测)
-  const hasActive = list.some(p => p.coin === coin && p.status === "pending");
-  if (!hasActive && signalScore >= 50 && price > 0) {
-    list.push({
-      id: now,
-      timestamp: now,
-      coin,
-      sym: META[coin].sym,
-      score: signalScore,
-      entry: price,
-      tp: +(price * (1 + FWD_TP)).toFixed(8),
-      sl: +(price * (1 - FWD_SL)).toFixed(8),
-      status: "pending",
-      pl: null,
-      resultTime: null,
-    });
-    updated = true;
-  }
-
-  // 保留最近50条
-  while (list.length > 50) list.shift();
-  if (updated) saveFwd(list);
-  renderForward(list);
-}
-
-function renderForward(list) {
-  if (!list.length) {
-    $("fwdList").innerHTML = "<span class='loading'>等待信号触发(得分≥50时自动记录)…</span>";
-    $("fwdStats").textContent = "";
-    return;
-  }
-  const sorted = [...list].reverse();
-  const wins = list.filter(p => p.status === "win").length;
-  const losses = list.filter(p => p.status === "loss").length;
-  const timeouts = list.filter(p => p.status === "timeout").length;
-  const decided = wins + losses;
-  const acc = decided > 0 ? (wins / decided * 100).toFixed(1) : "--";
-  $("fwdStats").textContent = `${decided}次已验证 | 准确率${acc}%`;
-
-  const fmtT = (ts) => new Date(ts).toLocaleString("zh-CN",
-    { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
-
-  $("fwdList").innerHTML = sorted.slice(0, 12).map(p => {
-    const statusMap = { pending: "⏳等待", win: "✅止盈", loss: "❌止损", timeout: "⏰超时" };
-    const cls = p.status === "win" ? "win" : p.status === "loss" ? "loss" : p.status === "timeout" ? "timeout" : "pending";
-    const plStr = p.pl !== null ? `${p.pl >= 0 ? "+" : ""}${p.pl.toFixed(1)}%` : "--";
-    return `<div class="fwd-row">
-      <span class="fwd-time">${fmtT(p.timestamp)}</span>
-      <span class="fwd-sym">${p.sym}</span>
-      <span class="fwd-detail">入${fmtP(p.entry)} TP${fmtP(p.tp)} SL${fmtP(p.sl)} (${p.score}分)</span>
-      <span class="fwd-price">${p.resultTime ? fmtT(p.resultTime) : "--"}</span>
-      <span class="fwd-status ${cls}">${statusMap[p.status]}</span>
-      <span class="fwd-pl ${p.pl >= 0 ? "win" : "loss"}">${plStr}</span>
-    </div>`;
-  }).join("");
 }
 
 // ==================== 模拟交易: 策略验证系统 ====================
