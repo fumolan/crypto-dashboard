@@ -1425,6 +1425,67 @@ function showTradeDetail(id) {
   $("tradeDetailOverlay").classList.remove("hidden");
 }
 
+// ==================== 导出交易记录到文件 ====================
+$("exportBtn").addEventListener("click", () => {
+  const list = loadSim();
+  if (!list.length) { alert("暂无交易记录"); return; }
+  const now = new Date();
+  const fmtDT = (ts) => new Date(ts).toLocaleString("zh-CN",
+    { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
+
+  const closed = list.filter(t => ["win", "loss", "liquidated", "timeout"].includes(t.status));
+  const strat = closed.filter(t => t.tradeType !== "impulse");
+  const imp = closed.filter(t => t.tradeType === "impulse");
+  const totalPnl = closed.reduce((s, t) => s + (t.pnl || 0), 0);
+  const wins = closed.filter(t => t.pnl > 0).length;
+
+  const stat = (arr) => arr.length
+    ? `${arr.length}笔 | 胜率${(arr.filter(t => t.pnl > 0).length / arr.length * 100).toFixed(1)}% | 盈亏${arr.reduce((s, t) => s + (t.pnl || 0), 0) >= 0 ? "+" : ""}$${arr.reduce((s, t) => s + (t.pnl || 0), 0).toFixed(2)}`
+    : "无记录";
+
+  let md = `# 模拟交易记录\n\n`;
+  md += `> 导出时间: ${fmtDT(now.getTime())}\n`;
+  md += `> 座右铭: **赢时赚多 · 输时亏少**\n\n`;
+  md += `---\n\n## 📊 汇总\n\n`;
+  md += `- **总交易**: ${closed.length}笔\n`;
+  md += `- **总盈亏**: ${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(2)}\n`;
+  md += `- **胜率**: ${closed.length ? (wins / closed.length * 100).toFixed(1) : 0}%\n\n`;
+  md += `| 类型 | 统计 |\n|------|------|\n`;
+  md += `| 📊 策略 | ${stat(strat)} |\n`;
+  md += `| 🔥 冲动 | ${stat(imp)} |\n\n`;
+  if (strat.length && imp.length) {
+    const diff = strat.reduce((s, t) => s + t.pnl, 0) - imp.reduce((s, t) => s + t.pnl, 0);
+    md += `> 💡 **结论**: ${diff > 0 ? "策略" : "冲动"}交易多赚 $${Math.abs(diff).toFixed(2)}\n\n`;
+  }
+  md += `---\n\n## 📒 逐笔记录\n\n`;
+
+  list.forEach((t, i) => {
+    const isLong = t.direction === "long";
+    const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时", open: "🟢持仓中", waiting: "⏳等待中" };
+    const holdMin = t.entryTime && t.exitTime ? Math.round((t.exitTime - t.entryTime) / 60000) : 0;
+    const holdStr = holdMin > 60 ? `${Math.floor(holdMin / 60)}h${holdMin % 60}m` : `${holdMin}m`;
+    md += `### #${i + 1} ${t.sym} ${isLong ? "做多" : "做空"} ${resMap[t.status] || t.status}\n\n`;
+    md += `| 项目 | 内容 |\n|------|------|\n`;
+    md += `| 类型 | ${t.tradeType === "impulse" ? "🔥冲动" : "📊策略"} |\n`;
+    if (t.scoreAtOpen !== undefined) md += `| 开仓时得分 | ${t.scoreAtOpen}/100 |\n`;
+    md += `| 入场 | ${fmtDT(t.entryTime)} @ ${t.entryPrice ? t.entryPrice.toLocaleString() : "--"} |\n`;
+    if (t.exitTime) md += `| 出场 | ${fmtDT(t.exitTime)} @ ${t.exitPrice ? t.exitPrice.toLocaleString() : "--"} (${resMap[t.status]}) |\n`;
+    if (t.entryTime && t.exitTime) md += `| 持仓时长 | ${holdStr} |\n`;
+    if (t.tpPrice) md += `| 止盈/止损/爆仓 | ${t.tpPrice.toLocaleString()} / ${t.slPrice.toLocaleString()} / ${t.liqPrice.toLocaleString()} |\n`;
+    md += `| 保证金×杠杆 | $${t.margin} × ${t.leverage}x = $${(t.margin * t.leverage).toLocaleString()} |\n`;
+    if (t.pnl !== null) md += `| **盈亏** | **${t.pnl >= 0 ? "+" : ""}$${t.pnl.toFixed(2)} (${t.roi >= 0 ? "+" : ""}${t.roi.toFixed(1)}%)** |\n`;
+    md += `\n`;
+  });
+
+  // 下载
+  const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `模拟交易记录_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
 // ==================== 事件 & 初始化 ====================
 $("coinSel").addEventListener("change", (e) => {
   coin = e.target.value;
