@@ -844,3 +844,5 @@ footer {
 .sa-del:hover { border-color: var(--up); background: rgba(229,69,69,0.08); }
 
 .calc-card { grid-column: 3; }
+
+.xray-trades, .xray-walls { max-height: 280px; overflow-y: auto; font-size: 11.5px; }

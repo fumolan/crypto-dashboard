@@ -148,18 +148,6 @@
     </div>
   </div>
 
-  <!-- 第三行: 大单 + 盘口 -->
-  <div class="grid data-row">
-    <div class="card trades-card">
-      <div class="card-title">🐋 大单成交 <span class="sub">时间倒序 · 买卖分区</span> <span id="tradeSummary" class="sub"></span></div>
-      <div id="tradesArea" class="trades-area"><span class="loading">加载中…</span></div>
-    </div>
-    <div class="card walls-card">
-      <div class="card-title">🧱 盘口大墙 <span class="sub">支撑/阻力 + 行为追踪</span> <span id="wallTime" class="sub"></span></div>
-      <div id="wallsArea" class="walls-area"><span class="loading">加载中…</span></div>
-    </div>
-  </div>
-
   <footer>
     数据源: Binance 公开API + CoinGecko · 全部模块由全局币种选择器联动 · <span id="dataRange"></span>
   </footer>
@@ -186,6 +174,14 @@
           <div class="xs-title">🤝 市场共识 <span class="sub">交易者的期望与分歧</span></div>
           <div id="xrayConsensus" class="xray-consensus"><span class="loading">分析中…</span></div>
           <div class="xray-insight" id="xrayConsensusInsight"></div>
+        </div>
+        <div class="xray-section">
+          <div class="xs-title">🐋 大单成交 <span class="sub">时间倒序 · 买卖分区</span> <span id="tradeSummary" class="sub"></span></div>
+          <div id="tradesArea" class="xray-trades"><span class="loading">加载中…</span></div>
+        </div>
+        <div class="xray-section">
+          <div class="xs-title">🧱 盘口大墙 <span class="sub">支撑/阻力 + 行为追踪</span> <span id="wallTime" class="sub"></span></div>
+          <div id="wallsArea" class="xray-walls"><span class="loading">加载中…</span></div>
         </div>
       </div>
     </div>
