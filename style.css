@@ -846,3 +846,5 @@ footer {
 .calc-card { grid-column: 3; }
 
 .xray-trades, .xray-walls { max-height: 280px; overflow-y: auto; font-size: 11.5px; }
+
+.trend-calc-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
