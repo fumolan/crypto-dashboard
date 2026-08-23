@@ -293,9 +293,20 @@ function renderVolumeChart() {
   const yR = r => PT + (1 - r) * (H - PT - PB - 20) + 10;
   const rPts = ratios.map((r, i) => `${(PL + (i / done.length) * cw + bw / 2).toFixed(1)},${yR(r).toFixed(1)}`).join(" ");
 
+  // 买占比统计
+  const rStats = calcRatioStats(ratios);
+  const avgY = yR(rStats.avg), medY = yR(rStats.median);
+  const avgLabel = (rStats.avg * 100).toFixed(1);
+  const medLabel = (rStats.median * 100).toFixed(1);
+  const modeLabel = (rStats.mode * 100).toFixed(1);
+
   $("volChart").innerHTML = `<svg viewBox="0 0 ${W} ${H}">
     <line x1="${PL}" y1="${yR(0.5)}" x2="${W-PR}" y2="${yR(0.5)}" stroke="#7a8299" stroke-dasharray="3,3" stroke-width="0.6" opacity="0.5"/>
     <text x="${PL-4}" y="${yR(0.5)+3}" text-anchor="end" font-size="8" fill="#7a8299">50%</text>
+    <line x1="${PL}" y1="${avgY}" x2="${W-PR}" y2="${avgY}" stroke="#f0b90b" stroke-width="0.8" stroke-dasharray="6,3" opacity="0.7"/>
+    <text x="${W-PR-4}" y="${avgY-2}" text-anchor="end" font-size="7.5" fill="#f0b90b">均${avgLabel}%</text>
+    <line x1="${PL}" y1="${medY}" x2="${W-PR}" y2="${medY}" stroke="#24b28c" stroke-width="0.8" stroke-dasharray="3,3" opacity="0.6"/>
+    <text x="${W-PR-4}" y="${medY-2}" text-anchor="end" font-size="7.5" fill="#24b28c">中${medLabel}%</text>
     ${bars}
     <polyline points="${rPts}" fill="none" stroke="#a855f7" stroke-width="1.2" opacity="0.85"/>
     <text x="${W-PR}" y="14" text-anchor="end" font-size="9" fill="#a855f7">紫线=买占比</text>
@@ -304,7 +315,33 @@ function renderVolumeChart() {
   const totalVol = vols.reduce((s, v) => s + v, 0);
   const totalBuy = done.reduce((s, k) => s + +k[10], 0);
   const buyPct = totalVol > 0 ? (totalBuy / totalVol * 100).toFixed(1) : 0;
-  $("volInfo").textContent = `4H总量 ${fmtU(totalVol * price)} | 主动买占比 ${buyPct}%`;
+  $("volInfo").innerHTML = `
+    <span style="font-weight:700;color:#a855f7">买占比 ${buyPct}%</span>
+    <span style="margin-left:8px;color:#f0b90b">均<b>${avgLabel}%</b></span>
+    <span style="margin-left:6px;color:#24b28c">中<b>${medLabel}%</b></span>
+    <span style="margin-left:6px;color:#7a8299">众<b>${modeLabel}%</b>×${rStats.modeCount}</span>
+    <span style="margin-left:8px;color:var(--muted)">总量${fmtU(totalVol * price)}</span>`;
+}
+
+// 买占比统计: 平均/中位/众数(按5%分桶)
+function calcRatioStats(ratios) {
+  const n = ratios.length;
+  const sorted = [...ratios].sort((a, b) => a - b);
+  const avg = ratios.reduce((s, r) => s + r, 0) / n;
+  const median = n % 2 ? sorted[(n - 1) / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2;
+
+  const bucket = 0.05;   // 5%一个桶
+  const buckets = {};
+  ratios.forEach(r => {
+    const key = (Math.round(r / bucket) * bucket).toFixed(2);
+    buckets[key] = (buckets[key] || 0) + 1;
+  });
+  let mode = 0.5, modeCount = 0;
+  Object.entries(buckets).forEach(([k, v]) => {
+    if (v > modeCount) { modeCount = v; mode = +k; }
+  });
+
+  return { avg, median, mode, modeCount };
 }
 
 // ==================== 总市值图表 ====================
