@@ -176,6 +176,7 @@ function renderPriceChart() {
     <polygon points="${PL},${H-PB} ${pts} ${x(closes.length-1)},${H-PB}" fill="${color}" opacity="0.08"/>
     <line x1="${PL}" y1="${y(maxP)}" x2="${W-PR}" y2="${y(maxP)}" stroke="#2a3242" stroke-dasharray="3,3" stroke-width="0.5"/>
     <line x1="${PL}" y1="${y(minP)}" x2="${W-PR}" y2="${y(minP)}" stroke="#2a3242" stroke-dasharray="3,3" stroke-width="0.5"/>
+    <line x1="${PL}" y1="${y(price)}" x2="${W-PR}" y2="${y(price)}" stroke="${color}" stroke-dasharray="4,3" stroke-width="0.8" opacity="0.6"/>
     <text x="${PL-4}" y="${y(maxP)+3}" text-anchor="end" font-size="9" fill="#7a8299">${fmtP(maxP)}</text>
     <text x="${PL-4}" y="${y(minP)+3}" text-anchor="end" font-size="9" fill="#7a8299">${fmtP(minP)}</text>
     <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/>
@@ -184,7 +185,12 @@ function renderPriceChart() {
     <text x="${PL}" y="${H-4}" font-size="8" fill="#7a8299">${ft(t0)}</text>
     <text x="${W-PR}" y="${H-4}" text-anchor="end" font-size="8" fill="#7a8299">${ft(t1)}</text>
   </svg>`;
-  $("priceInfo").textContent = `现价 ${fmtP(price)} USDT | 4H区间 ${fmtP(minP)} ~ ${fmtP(maxP)}`;
+  const curP = price || closes[closes.length - 1];
+  $("priceInfo").innerHTML = `
+    <span style="font-size:15px;font-weight:800;color:${color}">${fmtP(curP)}</span>
+    <span style="color:var(--muted)"> USDT</span>
+    <span style="color:${color};font-weight:700;margin-left:8px">${chg>=0?"▲":"▼"}${Math.abs(chg).toFixed(2)}%</span>
+    <span style="color:var(--muted);margin-left:8px">4H高 ${fmtP(maxP)} / 低 ${fmtP(minP)}</span>`;
 }
 
 // ==================== 成交量图表 ====================
