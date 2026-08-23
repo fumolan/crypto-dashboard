@@ -103,7 +103,10 @@
       <div id="simCompare" class="sim-compare"></div>
       <div id="simActive" class="sim-active hidden"></div>
       <div id="simHistory" class="sim-history"><span class="loading">暂无记录</span></div>
-      <button id="exportBtn" class="export-btn">📝 导出全部记录到文件 (.md)</button>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button id="viewReportBtn" class="export-btn" style="flex:1">📋 查看完整报告</button>
+        <button id="exportBtn" class="export-btn" style="flex:1">⬇️ 下载.md</button>
+      </div>
     </div>
     <div class="trend-calc-col">
     <div class="card trend-card">
@@ -191,6 +194,17 @@
           <div id="wallsArea" class="xray-walls"><span class="loading">加载中…</span></div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- 交易报告弹框 -->
+  <div class="xray-overlay hidden" id="reportOverlay">
+    <div class="xray-modal" style="max-width:600px">
+      <div class="xray-header">
+        <span class="xray-title">📋 交易报告</span>
+        <button class="xray-close" onclick="document.getElementById('reportOverlay').classList.add('hidden')">&times;</button>
+      </div>
+      <div class="xray-body" id="reportBody"></div>
     </div>
   </div>
 

@@ -1425,6 +1425,73 @@ function showTradeDetail(id) {
   $("tradeDetailOverlay").classList.remove("hidden");
 }
 
+// ==================== 查看完整报告(界面内显示) ====================
+$("viewReportBtn").addEventListener("click", () => {
+  const list = loadSim();
+  if (!list.length) { alert("暂无交易记录"); return; }
+  const fmtDT = (ts) => ts ? new Date(ts).toLocaleString("zh-CN",
+    { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) : "--";
+
+  const closed = list.filter(t => ["win", "loss", "liquidated", "timeout"].includes(t.status));
+  const strat = closed.filter(t => t.tradeType !== "impulse");
+  const imp = closed.filter(t => t.tradeType === "impulse");
+  const totalPnl = closed.reduce((s, t) => s + (t.pnl || 0), 0);
+  const wins = closed.filter(t => t.pnl > 0).length;
+  const resMap = { win: "✅止盈", loss: "❌止损", liquidated: "💥爆仓", timeout: "⏰超时", open: "🟢持仓中" };
+
+  let html = `<div style="text-align:center;padding:10px;border-radius:8px;margin-bottom:10px;background:var(--bg)">
+    <div style="font-size:11px;color:var(--muted)">总交易 ${closed.length}笔 · 胜率${closed.length ? (wins / closed.length * 100).toFixed(1) : 0}%</div>
+    <div style="font-size:24px;font-weight:800;color:${totalPnl >= 0 ? "var(--down)" : "var(--up)"}">${totalPnl >= 0 ? "+" : ""}$${totalPnl.toFixed(2)}</div>
+  </div>`;
+
+  const statRow = (label, arr, color) => {
+    if (!arr.length) return "";
+    const w = arr.filter(t => t.pnl > 0).length;
+    const pnl = arr.reduce((s, t) => s + (t.pnl || 0), 0);
+    return `<div class="con-row">
+      <span class="con-label" style="color:${color};font-weight:700">${label}</span>
+      <span class="con-val">${arr.length}笔 · 胜率${(w / arr.length * 100).toFixed(0)}%</span>
+      <span class="con-val" style="color:${pnl >= 0 ? "var(--down)" : "var(--up)"}">${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}</span>
+    </div>`;
+  };
+  html += statRow("📊 策略", strat, "var(--accent)");
+  html += statRow("🔥 冲动", imp, "var(--up)");
+
+  if (strat.length && imp.length) {
+    const diff = strat.reduce((s, t) => s + t.pnl, 0) - imp.reduce((s, t) => s + t.pnl, 0);
+    html += `<div class="xray-insight" style="margin-top:6px">
+      💡 <b>${diff > 0 ? "策略" : "冲动"}交易多赚 $${Math.abs(diff).toFixed(2)}</b> — 冲动的代价已量化
+    </div>`;
+  }
+
+  html += `<div style="border-top:1px dashed var(--border);margin:10px 0"></div><div style="font-size:12px;font-weight:700;color:var(--accent);margin-bottom:6px">📒 逐笔记录</div>`;
+
+  list.forEach((t) => {
+    const pos = (t.pnl || 0) > 0;
+    const isLong = t.direction === "long";
+    const holdMin = t.entryTime && t.exitTime ? Math.round((t.exitTime - t.entryTime) / 60000) : 0;
+    const holdStr = holdMin > 60 ? `${Math.floor(holdMin / 60)}h${holdMin % 60}m` : `${holdMin}m`;
+    const typeTag = t.tradeType === "impulse" ? "🔥冲动" : "📊策略";
+    html += `<div style="padding:6px 8px;background:var(--bg);border-radius:6px;margin-bottom:5px;border-left:3px solid ${pos ? "var(--down)" : "var(--up)"}">
+      <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px">
+        <span><b>${t.sym}</b> ${isLong ? "↑做多" : "↓做空"} <span style="color:var(--muted);font-size:10px">[${typeTag}${t.scoreAtOpen !== undefined ? ` ${t.scoreAtOpen}分` : ""}]</span></span>
+        <span style="font-weight:800;color:${pos ? "var(--down)" : "var(--up)"}">${t.pnl !== null ? `${pos ? "+" : ""}$${t.pnl.toFixed(2)}` : resMap[t.status]}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:2px">
+        <span>${fmtDT(t.entryTime)} @ ${t.entryPrice ? t.entryPrice.toLocaleString() : "--"}</span>
+        <span>${t.exitTime ? `→ ${fmtDT(t.exitTime)} @ ${t.exitPrice ? t.exitPrice.toLocaleString() : "--"} (${holdStr})` : resMap[t.status] || ""}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9.5px;color:var(--muted);margin-top:1px">
+        <span>${t.margin}U×${t.leverage}x</span>
+        <span>TP:${t.tpPrice ? t.tpPrice.toFixed(2) : "--"} SL:${t.slPrice ? t.slPrice.toFixed(2) : "--"} 爆:${t.liqPrice ? t.liqPrice.toFixed(2) : "--"}</span>
+      </div>
+    </div>`;
+  });
+
+  $("reportBody").innerHTML = html;
+  $("reportOverlay").classList.remove("hidden");
+});
+
 // ==================== 导出交易记录到文件 ====================
 $("exportBtn").addEventListener("click", () => {
   const list = loadSim();
