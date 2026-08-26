@@ -1223,9 +1223,12 @@ function updateSimDirButtons() {
   if (!bl || !bs) return;
   bl.style.opacity = simDirection === "long" ? 1 : 0.4;
   bs.style.opacity = simDirection === "short" ? 1 : 0.4;
+  // 选中方向高亮边框, 一眼可见
+  bl.classList.toggle("dir-sel", simDirection === "long");
+  bs.classList.toggle("dir-sel", simDirection === "short");
 }
-$("simDirLong").addEventListener("click", () => { simDirection = "long"; updateSimDirButtons(); });
-$("simDirShort").addEventListener("click", () => { simDirection = "short"; updateSimDirButtons(); });
+$("simDirLong").addEventListener("click", () => { simDirection = "long"; updateSimDirButtons(); updateSimPreview(); });
+$("simDirShort").addEventListener("click", () => { simDirection = "short"; updateSimDirButtons(); updateSimPreview(); });
 
 // 切换币种时重置策略开仓表单: 方向回到默认, 表单收起
 // (避免带着上一个币种选的做多/做空直接开到新币上)

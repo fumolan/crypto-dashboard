@@ -437,6 +437,14 @@ body {
 .sr-chg.up { color: var(--up); }
 .sr-chg.down { color: var(--down); }
 
+/* 策略开仓方向按钮选中态 */
+.impulse-btn.dir-sel {
+  border-color: var(--accent);
+  background: rgba(240, 185, 11, 0.18);
+  font-weight: 800;
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
 /* ---------- 趋势解读 ---------- */
 .trend-list { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow-y: auto; }
 .trend-row {
