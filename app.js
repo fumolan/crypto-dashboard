@@ -139,7 +139,7 @@ async function fetchAll() {
     const [k5, tickers, all1h] = await Promise.all([
       apiGet(`/api/v3/klines?symbol=${coin}&interval=5m&limit=49`),
       apiGet(`/api/v3/ticker/24hr?symbols=${encodeURIComponent(JSON.stringify(SYMBOLS))}`),
-      need1h ? Promise.all(SYMBOLS.map(s => apiGet(`/api/v3/klines?symbol=${s}&interval=1h&limit=25}`).catch(() => null))) : null,
+      need1h ? Promise.all(SYMBOLS.map(s => apiGet(`/api/v3/klines?symbol=${s}&interval=1h&limit=25`).catch(() => null))) : null,
     ]);
     if (need1h) lastHourly = Date.now();
 
