@@ -248,6 +248,7 @@ function renderCoinStrip() {
       $("coinSel").value = coin;
       wallHistory.clear();
       $("entry").value = "";
+      resetSimForm();
       fetchAll();
     });
   });
@@ -819,6 +820,7 @@ function renderScanResults(results) {
       $("coinSel").value = coin;
       wallHistory.clear();
       $("entry").value = "";
+      resetSimForm();
       $("scanOverlay").classList.add("hidden");
       fetchAll();
     });
@@ -1224,6 +1226,15 @@ function updateSimDirButtons() {
 }
 $("simDirLong").addEventListener("click", () => { simDirection = "long"; updateSimDirButtons(); });
 $("simDirShort").addEventListener("click", () => { simDirection = "short"; updateSimDirButtons(); });
+
+// 切换币种时重置策略开仓表单: 方向回到默认, 表单收起
+// (避免带着上一个币种选的做多/做空直接开到新币上)
+function resetSimForm() {
+  simDirection = "long";
+  updateSimDirButtons();
+  $("simForm").classList.add("hidden");
+  $("simStartBtn").classList.remove("hidden");
+}
 
 // 点击"策略开仓" → 显示参数表单
 $("simStartBtn").addEventListener("click", () => {
@@ -1829,6 +1840,7 @@ $("coinSel").addEventListener("change", (e) => {
   coin = e.target.value;
   wallHistory.clear();
   $("entry").value = "";
+  resetSimForm();
   fetchAll();
 });
 $("intervalSel").addEventListener("change", (e) => {
