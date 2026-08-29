@@ -42,7 +42,9 @@
   <!-- 第一行: 三个图表 -->
   <div class="grid charts-row">
     <div class="card chart-card">
-      <div class="card-title">📈 价格走势 <span class="sub">4小时 · 5分钟</span></div>
+      <div class="card-title">📈 价格走势 <span class="sub">4小时 · 5分钟</span>
+        <button class="xray-btn" id="hourBtn" title="最近1小时分钟级价格曲线">🕐 1小时</button>
+      </div>
       <div id="priceChart" class="chart-area"><span class="loading">加载中…</span></div>
       <div class="chart-info" id="priceInfo"></div>
     </div>
@@ -167,6 +169,22 @@
       <div class="xray-body">
         <div class="xs-title">全池信号评分 <span class="sub">按最高分排序 · 点击币种直接跳转 · S键重扫</span></div>
         <div id="scanList" class="scan-list"><span class="loading">按 S 或点按钮开始扫描</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 1小时价格细览弹框 -->
+  <div class="xray-overlay hidden" id="hourOverlay">
+    <div class="xray-modal" style="max-width:640px">
+      <div class="xray-header">
+        <span class="xray-title">🕐 最近1小时价格 · <span id="hourSym">--</span></span>
+        <button class="xray-close" id="hourClose">&times;</button>
+      </div>
+      <div class="xray-body">
+        <div id="hourStats" class="hour-stats"></div>
+        <div id="hourChart" class="hour-chart"><span class="loading">加载中…</span></div>
+        <div class="xs-title" style="margin-top:8px">分钟明细 <span class="sub">最新在前 · 时间 | 价格 | 幅度</span></div>
+        <div id="hourRows" class="hour-rows"><span class="loading">加载中…</span></div>
       </div>
     </div>
   </div>

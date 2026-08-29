@@ -255,6 +255,84 @@ function renderCoinStrip() {
 }
 
 // ==================== 价格图表 ====================
+// ==================== 1小时价格细览 ====================
+// 按币价自适应小数位: 大币2-3位, 中价4位, 小价5位, 微价(PEPE级)4位有效数字
+function fmtP5(p) {
+  if (p >= 1000) return p.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  if (p >= 100) return p.toFixed(3);
+  if (p >= 1) return p.toFixed(4);
+  if (p >= 0.01) return p.toFixed(5);
+  return p.toPrecision(4);
+}
+
+async function showHourPanel() {
+  const sym = META[coin].sym;
+  $("hourSym").textContent = `${sym} · 1分钟线`;
+  $("hourOverlay").classList.remove("hidden");
+  $("hourStats").innerHTML = "<span class='loading'>加载中…</span>";
+  $("hourChart").innerHTML = "<span class='loading'>加载中…</span>";
+  $("hourRows").innerHTML = "";
+  try {
+    const kl = await apiGet(`/api/v3/klines?symbol=${coin}&interval=1m&limit=61`);
+    if (!Array.isArray(kl) || kl.length < 2) throw new Error("无数据");
+    const bars = kl.slice(0, -1);              // 已收线的分钟
+    const closes = bars.map(k => +k[4]);
+    const first = closes[0], last = closes[closes.length - 1];
+    const chg = (last / first - 1) * 100;
+    const hi = Math.max(...bars.map(k => +k[2]));
+    const lo = Math.min(...bars.map(k => +k[3]));
+    const amp = (hi / lo - 1) * 100;
+    const color = chg >= 0 ? "var(--up)" : "var(--down)";
+
+    const dec = last >= 1000 ? 2 : last >= 100 ? 3 : last >= 1 ? 4 : last >= 0.01 ? 5 : 4;
+    $("hourStats").innerHTML = `
+      <div class="hs-row"><span class="l">现价</span><b style="color:${color}">${fmtP5(last)}</b>
+        <span class="l">1小时涨跌</span><b style="color:${color}">${chg >= 0 ? "+" : ""}${chg.toFixed(3)}%</b>
+        <span class="l">显示精度</span><b>${dec === 4 && last < 0.01 ? "4位有效数字" : dec + "位小数"}</b></div>
+      <div class="hs-row"><span class="l">最高</span><b style="color:var(--up)">${fmtP5(hi)}</b>
+        <span class="l">最低</span><b style="color:var(--down)">${fmtP5(lo)}</b>
+        <span class="l">振幅</span><b>${amp.toFixed(3)}%</b></div>`;
+
+    // 分钟级曲线
+    const W = 560, H = 170, PL = 96, PR = 10, PT = 10, PB = 18;
+    const cw = W - PL - PR;
+    const minP = Math.min(...closes), maxP = Math.max(...closes);
+    const range = maxP - minP || Math.abs(minP) * 0.001 || 1;
+    const x = i => PL + (i / (closes.length - 1)) * cw;
+    const y = p => PT + (1 - (p - minP) / range) * (H - PT - PB);
+    const pts = closes.map((c, i) => `${x(i).toFixed(1)},${y(c).toFixed(1)}`).join(" ");
+    const ft = d => d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
+    const lc = chg >= 0 ? "#e54545" : "#24b28c";
+    $("hourChart").innerHTML = `<svg viewBox="0 0 ${W} ${H}">
+      <polygon points="${PL},${H-PB} ${pts} ${x(closes.length-1)},${H-PB}" fill="${lc}" opacity="0.08"/>
+      <line x1="${PL}" y1="${y(maxP)}" x2="${W-PR}" y2="${y(maxP)}" stroke="#2a3242" stroke-dasharray="3,3" stroke-width="0.5"/>
+      <line x1="${PL}" y1="${y(minP)}" x2="${W-PR}" y2="${y(minP)}" stroke="#2a3242" stroke-dasharray="3,3" stroke-width="0.5"/>
+      <text x="${PL-4}" y="${y(maxP)+3}" text-anchor="end" font-size="9" fill="#7a8299">${fmtP5(maxP)}</text>
+      <text x="${PL-4}" y="${y(minP)+3}" text-anchor="end" font-size="9" fill="#7a8299">${fmtP5(minP)}</text>
+      <polyline points="${pts}" fill="none" stroke="${lc}" stroke-width="1.6"/>
+      <circle cx="${x(closes.length-1)}" cy="${y(last)}" r="3" fill="${lc}"/>
+      <text x="${W-PR}" y="14" text-anchor="end" font-size="11" fill="${lc}" font-weight="700">${fmtP5(last)}</text>
+      <text x="${PL}" y="${H-5}" font-size="8.5" fill="#7a8299">${ft(new Date(+bars[0][0]))}</text>
+      <text x="${W-PR}" y="${H-5}" text-anchor="end" font-size="8.5" fill="#7a8299">${ft(new Date(+bars[bars.length-1][0]))}</text>
+    </svg>`;
+
+    // 分钟明细(最新在前)
+    const rev = [...bars].reverse();
+    $("hourRows").innerHTML = rev.map((k, i) => {
+      const p = +k[4];
+      const prev = rev[i + 1] ? +rev[i + 1][4] : null;
+      const d = prev ? (p / prev - 1) * 100 : 0;
+      return `<div class="hr-row">
+        <span class="h-time">${ft(new Date(+k[0]))}</span>
+        <span class="h-price">${fmtP5(p)}</span>
+        <span class="h-chg ${d >= 0 ? "up" : "down"}">${prev === null ? "--" : (d >= 0 ? "+" : "") + d.toFixed(3) + "%"}</span>
+      </div>`;
+    }).join("");
+  } catch (e) {
+    $("hourChart").innerHTML = `<span class='loading'>加载失败: ${e.message}</span>`;
+  }
+}
+
 function renderPriceChart() {
   if (!klines5m.length) return;
   const done = klines5m.slice(0, -1);
@@ -1871,13 +1949,22 @@ $("btShort").addEventListener("click", () => runBacktest("short"));
   $(id).addEventListener("input", updateCalc));
 
 // ===== 开仓扫描: 按钮S快捷键 + 弹窗关闭 =====
+$("hourBtn").addEventListener("click", showHourPanel);
+$("hourClose").addEventListener("click", () => $("hourOverlay").classList.add("hidden"));
+$("hourOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "hourOverlay") $("hourOverlay").classList.add("hidden");
+});
 $("scanBtn").addEventListener("click", scanOpportunities);
 $("scanClose").addEventListener("click", () => $("scanOverlay").classList.add("hidden"));
 $("scanOverlay").addEventListener("click", (e) => {
   if (e.target.id === "scanOverlay") $("scanOverlay").classList.add("hidden");
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { $("scanOverlay").classList.add("hidden"); return; }
+  if (e.key === "Escape") {
+    $("scanOverlay").classList.add("hidden");
+    $("hourOverlay").classList.add("hidden");
+    return;
+  }
   if ((e.key === "s" || e.key === "S") && !e.ctrlKey && !e.metaKey && !e.altKey) {
     const tag = (e.target.tagName || "").toLowerCase();
     if (tag === "input" || tag === "select" || tag === "textarea") return;

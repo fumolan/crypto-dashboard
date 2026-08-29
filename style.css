@@ -445,6 +445,21 @@ body {
   box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
+/* ---------- 1小时价格细览 ---------- */
+.hour-stats { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; }
+.hs-row { display: flex; gap: 8px; font-size: 12px; align-items: baseline; flex-wrap: wrap; }
+.hs-row .l { color: var(--muted); font-size: 11px; }
+.hs-row b { margin-right: 12px; font-variant-numeric: tabular-nums; }
+.hour-chart svg { width: 100%; }
+.hour-rows { display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
+.hr-row { display: flex; gap: 10px; font-size: 11.5px; font-variant-numeric: tabular-nums; padding: 2px 6px; border-radius: 4px; }
+.hr-row:nth-child(odd) { background: rgba(42, 50, 66, 0.3); }
+.h-time { width: 46px; color: var(--muted); }
+.h-price { flex: 1; font-weight: 600; }
+.h-chg { width: 72px; text-align: right; }
+.h-chg.up { color: var(--up); }
+.h-chg.down { color: var(--down); }
+
 /* ---------- 趋势解读 ---------- */
 .trend-list { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow-y: auto; }
 .trend-row {
